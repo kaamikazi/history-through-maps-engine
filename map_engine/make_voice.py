@@ -26,6 +26,7 @@ because the file name includes a short fingerprint (hash) of the text.
 import argparse
 import hashlib
 import json
+import math
 import os
 import sys
 import time
@@ -124,6 +125,53 @@ def read_wav(path):
 
 
 # --------------------------------------------------------------------------
+# SUBTITLES (.srt) for YouTube - brand videos show no caption boxes on screen
+# --------------------------------------------------------------------------
+def srt_time(s):
+    """Seconds -> the SRT clock format 00:01:02,345"""
+    ms = int(round(s * 1000))
+    h, ms = divmod(ms, 3600000)
+    m, ms = divmod(ms, 60000)
+    sec, ms = divmod(ms, 1000)
+    return f"{h:02d}:{m:02d}:{sec:02d},{ms:03d}"
+
+
+def write_srt(lines, path, width=42):
+    """lines = list of (start_seconds, end_seconds, text).
+    Each spoken line is cut into short subtitles of at most 2 rows of `width` letters
+    (the usual limit for easy reading); each piece gets time in proportion to its length."""
+    import re
+    import textwrap
+    cues = []
+    for start, end, text in lines:
+        pieces = []
+        for sentence in re.split(r"(?<=[.!?])\s+", text):  # each sentence starts a new subtitle
+            # How many subtitles this sentence needs (2 rows each), then split its words into
+            # that many EVEN parts, so no subtitle is left with just one or two words.
+            n = math.ceil(len(textwrap.wrap(sentence, width)) / 2)
+            words = sentence.split()
+            target = len(sentence) / n
+            part, size = [], 0
+            for w in words:
+                if part and size + len(w) > target and n > 1:
+                    pieces.append(" ".join(part))
+                    part, size, n = [], 0, n - 1
+                part.append(w)
+                size += len(w) + 1
+            pieces.append(" ".join(part))
+        total = sum(len(p) for p in pieces)
+        t = start
+        for p in pieces:
+            d = (end - start) * len(p) / total
+            cues.append((t, t + d, "\n".join(textwrap.wrap(p, width))))
+            t += d
+    with open(path, "w", encoding="utf-8") as f:
+        for n, (a, b, txt) in enumerate(cues, start=1):
+            f.write(f"{n}\n{srt_time(a)} --> {srt_time(b)}\n{txt}\n\n")
+    print(f"Saved {path}  ({len(cues)} subtitles)")
+
+
+# --------------------------------------------------------------------------
 # 3.  MAIN: all captions -> clips -> one narration track
 # --------------------------------------------------------------------------
 def main():
@@ -134,6 +182,8 @@ def main():
     ap.add_argument("--style", default=DEFAULT_STYLE, help="how the voice should read")
     ap.add_argument("--lead", type=float, default=0.3, help="seconds after a caption appears before the voice starts")
     ap.add_argument("--out", help="folder for the clips (default: out/voice/<episode name>)")
+    ap.add_argument("--subtitles-only", action="store_true",
+                    help="only write the .srt from the caption times (no voice, no Google request)")
     args = ap.parse_args()
 
     ep_path = Path(args.episode)
@@ -145,6 +195,11 @@ def main():
     captions = sorted([e for e in episode["events"] if e["type"] == "caption"], key=lambda e: e["t"])
     if not captions:
         sys.exit("This episode has no caption events, so there is nothing to say.")
+    srt_path = out_dir / f"{ep_path.stem}.srt"
+
+    if args.subtitles_only:  # rough subtitles timed by the captions (before the voice exists)
+        write_srt([(c["t"] + args.lead, c["t"] + c["dur"], c["text"]) for c in captions], srt_path)
+        return
 
     key, model, voice = load_settings(args.env)
     voice = args.voice or voice
@@ -199,6 +254,8 @@ def main():
         json.dumps({"voice": voice, "model": model, "style": args.style, "clips": clips}, indent=2),
         encoding="utf-8")
     print(f"\nSaved {narration}")
+    # Subtitles timed by the real voice: each one starts with its clip and lasts as long as the speech.
+    write_srt([(c["t"], c["t"] + c["seconds"], c["text"]) for c in clips], srt_path)
     if problems:
         print(f"WARNING: {problems} line(s) are too long for their slot. Give those captions more time "
               f"in the episode JSON (or shorten the text), then run this again.")

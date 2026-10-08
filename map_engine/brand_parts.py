@@ -355,6 +355,67 @@ def make_end_screen(ov, fonts, P, e):
     return g
 
 
+def draw_mark(ov, P, cx, cy, scale, z=6):
+    """The medallion logo, finished (not animated), centred at pixel (cx, cy).
+    scale = pixels per logo unit (the logo drawing is 120 units wide)."""
+    def pt(x, y):
+        return cx + (x - 60) * scale, cy + (y - 64) * scale
+
+    def add(p):
+        ov.add_patch(p)
+        return p
+
+    add(Circle(pt(60, 64), 54 * scale, fc=P["ground-raised"], ec=P["ink"], lw=3 * scale * PT, zorder=z))
+    add(Circle(pt(60, 64), 48 * scale, fc="none", ec=P["ink"], lw=1 * scale * PT, zorder=z))
+    add(Circle(pt(60, 64), 41 * scale, fc=P["map-land"], ec="none", zorder=z))
+    clip = Circle(pt(60, 64), 41 * scale, transform=ov.transData)
+    terr = add(MplPolygon([pt(*p) for p in MARK_TERRITORY], closed=True, fc=P["territory"], ec="none", zorder=z + 0.1))
+    terr.set_clip_path(clip)
+    # 45-degree hatching over the red territory, 4 logo units apart
+    xs, ys = zip(*[pt(*p) for p in MARK_TERRITORY])
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    gap = 4 * scale * math.sqrt(2)
+    hatch = LineCollection([[(x, y1), (x + (y1 - y0), y0)] for x in np.arange(x0 - (y1 - y0), x1, gap)],
+                           colors=P["madder"], linewidths=1 * scale * PT, zorder=z + 0.2)
+    hatch.set_clip_path(MplPolygon([pt(*p) for p in MARK_TERRITORY], closed=True, transform=ov.transData))
+    ov.add_collection(hatch)
+    a = np.linspace(0, 2 * math.pi, 120)
+    grat = [np.column_stack([60 + 18 * np.cos(a), 64 + 41 * np.sin(a)]),
+            [(60, 23), (60, 105)], [(19, 64), (101, 64)], [(22, 46), (98, 46)], [(22, 82), (98, 82)]]
+    for g in grat:
+        (ln,) = ov.plot(*zip(*[pt(x, y) for x, y in g]), color=P["ink"], lw=1.2 * scale * PT, zorder=z + 0.3)
+        ln.set_clip_path(clip)
+    (ol,) = ov.plot(*zip(*[pt(*p) for p in MARK_TERRITORY + [MARK_TERRITORY[0]]]), color=P["ink"],
+                    lw=1.6 * scale * PT, zorder=z + 0.3, solid_joinstyle="round")
+    ol.set_clip_path(clip)
+    add(Circle(pt(60, 64), 41 * scale, fc="none", ec=P["ink"], lw=2 * scale * PT, zorder=z + 0.4))
+    add(MplPolygon([pt(60, 1), pt(66, 10), pt(60, 17), pt(54, 10)], closed=True, fc=P["gold"], ec=P["ink"],
+                   lw=1 * scale * PT, zorder=z + 0.4))
+
+
+def make_thumbnail_card(ov, fonts, P, kicker, title):
+    """Thumbnail cartouche (templates/thumbnail.html). The template is 1280x720 and our overlay is
+    1920x1080, so every number from the template is multiplied by K = 1.5."""
+    K = 1.5
+    g = Group()
+    _rect(ov, g, 40 * K, 60 * K, 520 * K, 600 * K, fc=P["ground-raised"], ec=P["ink"], lw_px=3 * K, z=6)
+    _rect(ov, g, 52 * K, 72 * K, 496 * K, 576 * K, ec=P["ink"], lw_px=1.2 * K, z=6.1)
+    tick = MplPolygon([(300 * K, 51 * K), (306 * K, 60 * K), (300 * K, 69 * K), (294 * K, 60 * K)], closed=True,
+                      fc=P["gold"], ec=P["ink"], lw=1.5 * K * PT, zorder=6.2)
+    ov.add_patch(tick)
+    g.add(tick)
+    _text(ov, g, fonts, "caps", kicker, 30 * K, P["madder"], 84 * K, 150 * K, tracking=6 * K, z=6.3)
+    _line(ov, g, 84 * K, 172 * K, 516 * K, 172 * K, P["ink"], 1.5 * K, z=6.3)
+    _line(ov, g, 84 * K, 178 * K, 516 * K, 178 * K, P["ink"], 1.5 * K, z=6.3)
+    _text(ov, g, fonts, "display", title, 104 * K, P["ink"], 84 * K, 290 * K, line_height=106 * K, z=6.3)
+    draw_mark(ov, P, (84 + 30) * K, (540 + 32) * K, 0.5 * K, z=6.4)  # small logo: 60 x 64 in the template
+    _text(ov, g, fonts, "display", "History Through Maps", 32 * K, P["ink"], 160 * K, 582 * K, z=6.3)
+    _text(ov, g, fonts, "caps", "Every border has a story", 15 * K, P["ink-muted"], 160 * K, 610 * K,
+          tracking=5 * K, z=6.3)
+    g.set_alpha(1.0)
+    return g
+
+
 # ---- the sting: the medallion is engraved, the red territory hatches in, the wordmark settles ----
 # Medallion shapes copied from assets/logos/mark-on-dark.svg (a 120 x 120 drawing, centre 60, 64).
 MARK_TERRITORY = [(62, 30), (90, 42), (98, 66), (80, 74), (84, 98), (62, 106), (52, 84), (68, 68), (56, 52)]
