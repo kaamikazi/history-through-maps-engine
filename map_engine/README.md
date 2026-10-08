@@ -21,6 +21,21 @@ python thumbnail.py episodes/ep03_radcliffe_line.json styles/cinematic.json out/
 ```
 Swap `cinematic` for `antique` to change the look.
 
+## Add the voice (narration)
+The voice reads the caption text aloud (Google Gemini text-to-speech, voice "Charon").
+```
+# 1. make one voice clip per caption, then one narration.wav as long as the video
+python make_voice.py episodes/ep03_radcliffe_line.json --env "E:/arts and stuff/TTS automation/.env"
+
+# 2. put it into a finished video (makes ..._voice.mp4, the original is kept)
+python add_voice.py out/ep03_cinematic_1080p.mp4 out/voice/ep03_radcliffe_line/narration.wav
+```
+- Clips are saved in `out/voice/<episode>/` and only re-made when a caption's text changes.
+- `make_voice.py` prints a timing check. If a line is TOO LONG, give that caption more time in the episode JSON.
+- The free Gemini key allows only about 10 voice requests a day. If it stops, run it again tomorrow
+  (finished clips are kept), or turn on billing in Google AI Studio.
+- `add_voice.py` sets the loudness to -14 LUFS, the level YouTube plays at.
+
 ## Folders
 - `map_engine.py`   the engine (comments explain each part)
 - `styles/`         cinematic.json, antique.json  (colours, fonts, sizes)

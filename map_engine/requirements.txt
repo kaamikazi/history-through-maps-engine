@@ -3,3 +3,6 @@ numpy
 shapely
 pyshp
 pillow
+# only needed for the voice (make_voice.py):
+google-genai
+python-dotenv
