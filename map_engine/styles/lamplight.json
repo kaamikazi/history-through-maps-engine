@@ -1,0 +1,155 @@
+{
+  "name": "Lamplight (brand)",
+  "note": "History Through Maps brand, DARK theme, used for VIDEO. Colours are brand tokens ('@ink' etc.) read from brand/tokens.json. Sizes ending in _px are pixels at 1080p; 'widths' are points (1 px = 0.72 pt).",
+  "tokens_file": "../brand/tokens.json",
+  "theme": "dark",
+  "brand": true,
+  "captions": false,
+  "fonts": {
+    "display": "IMFeENit28P.ttf",
+    "caps": "CormorantSC-SemiBold.ttf",
+    "body": "EBGaramond-wght.ttf",
+    "body_italic": "EBGaramond-Italic-wght.ttf"
+  },
+  "colors": {
+    "sea": "@map-water",
+    "land": "@map-land",
+    "border": "@map-border",
+    "coast": "@map-border",
+    "river": "@verdigris",
+    "admin1": "@hairline",
+    "waterline": "@hairline",
+    "title_dim": "@ground"
+  },
+  "widths": {
+    "border": 1.08,
+    "coast": 1.44,
+    "river": 0.7,
+    "admin1": 0.6
+  },
+  "river_alpha": 0.55,
+  "admin1_alpha": 0.9,
+  "land_hatch": {
+    "angle": 60,
+    "spacing_px": 8,
+    "width_px": 0.8,
+    "color": "@map-hatch"
+  },
+  "graticule": {
+    "color": "@hairline",
+    "width_px": 1.0,
+    "alpha": 0.9,
+    "steps": [
+      [
+        11,
+        5
+      ],
+      [
+        0,
+        1
+      ]
+    ]
+  },
+  "hatch_in": 0.8,
+  "fills": {
+    "territory": {
+      "color": "@territory",
+      "alpha": 1.0,
+      "hatch": {
+        "angle": 45,
+        "spacing_px": 6,
+        "width_px": 1.4,
+        "color": "@ground-sunk"
+      },
+      "outline": "@ink",
+      "outline_px": 2.4
+    },
+    "second": {
+      "color": "@verdigris",
+      "alpha": 0.85,
+      "outline": "@ink",
+      "outline_px": 2.0
+    },
+    "contested": {
+      "color": "none",
+      "alpha": 1.0,
+      "hatch": {
+        "angle": 45,
+        "spacing_px": 6,
+        "width_px": 1.4,
+        "color": "@madder"
+      },
+      "outline": "@map-border",
+      "outline_px": 2.0,
+      "dashed": true
+    }
+  },
+  "line": {
+    "ink": "@ink",
+    "layers": [
+      [
+        2.6,
+        1.0,
+        "ink"
+      ]
+    ],
+    "tip_size": 7,
+    "tip": "@ink",
+    "tip_edge": "@ground"
+  },
+  "labels": {
+    "city": {
+      "font": "caps",
+      "size_px": 26,
+      "tracking_px": 3,
+      "color": "@ink",
+      "dx": 14,
+      "dy": 9,
+      "ha": "left",
+      "marker": "o",
+      "marker_size": 7,
+      "marker_fc": "@ink",
+      "marker_ec": "@ground"
+    },
+    "region": {
+      "font": "caps",
+      "size_px": 34,
+      "tracking_px": 8,
+      "color": "@ink",
+      "alpha": 0.95,
+      "ha": "center",
+      "line_height": 42
+    },
+    "water": {
+      "font": "display",
+      "size_px": 30,
+      "tracking_px": 0,
+      "color": "@verdigris",
+      "alpha": 0.95,
+      "ha": "center"
+    }
+  },
+  "stamp": {
+    "x": 96,
+    "y": 132,
+    "font": "caps",
+    "size_px": 44,
+    "tracking_px": 10,
+    "color": "@madder"
+  },
+  "credit": {
+    "font": "body_italic",
+    "size_px": 20,
+    "color": "@ink-muted",
+    "x": 72,
+    "y": 1046
+  },
+  "cite": {
+    "font": "body_italic",
+    "size_px": 24,
+    "color": "@ink-muted",
+    "x": 960,
+    "y": 1006
+  },
+  "deco": {}
+}

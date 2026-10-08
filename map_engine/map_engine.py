@@ -55,6 +55,10 @@ from shapely.geometry.polygon import orient
 from shapely.ops import linemerge, unary_union
 from shapely import affinity
 
+# The "History Through Maps" brand pieces (hatching, small-capital text, plates, sting).
+from brand_parts import (PT, Hatcher, PathText, Sting, load_style, make_chapter_card, make_end_screen,
+                         make_lower_third, make_title_card)
+
 HERE = Path(__file__).resolve().parent
 
 # --------------------------------------------------------------------------
@@ -250,6 +254,11 @@ class Renderer:
         self.scale = scale
         self.W, self.H = int(W0 * scale), int(H0 * scale)
         self.fonts_dir = HERE / "fonts"
+        # Brand styles (lamplight / paper) switch on the engraved-atlas look.
+        self.brand = bool(style.get("brand"))
+        # Brand styles name fonts by their job (display, caps, body...). Full file paths:
+        self.font_files = {k: self.fonts_dir / v for k, v in style.get("fonts", {}).items()}
+        self.palette = style.get("palette", {})  # every brand colour, by token name
         self.events = sorted(episode["events"], key=lambda e: e["t"])
         self.cam_keys = sorted(episode["camera"], key=lambda k: k["t"])
         self.duration = float(episode["duration"])
@@ -297,6 +306,20 @@ class Renderer:
             land = PathPatch(geom_to_path(land_union), fc=c["land"], ec="none", zorder=2)
             self.ax.add_patch(land)
             lod["artists"].append(land)
+            lod["land"] = land  # kept so the land hatching can be clipped to it
+            # graticule (brand): thin lines every few degrees, like on an engraved atlas
+            if s.get("graticule"):
+                g = s["graticule"]
+                step = dict(g["steps"]).get(min_h, 5)  # e.g. every 5 degrees wide, every 1 degree close
+                west, south, east, north = World.CLIP
+                grid = []
+                for lon in np.arange(math.ceil(west / step) * step, east + 1e-9, step):
+                    grid.append(np.array([proj_xy(lon, south), proj_xy(lon, north)]))
+                for lat in np.arange(math.ceil(south / step) * step, north + 1e-9, step):
+                    grid.append(np.array([proj_xy(west, lat), proj_xy(east, lat)]))
+                gl = LineCollection(grid, colors=g["color"], linewidths=g["width_px"] * PT, alpha=g.get("alpha", 1), zorder=2.2)
+                self.ax.add_collection(gl)
+                lod["artists"].append(gl)
             # country borders (thin) and coastline (thicker)
             border_lines = []
             for g in land_geoms:
@@ -317,7 +340,8 @@ class Renderer:
             rl = []
             for g in rv:
                 rl += lines_of(g)
-            riv = LineCollection(rl, colors=c["river"], linewidths=s["widths"]["river"], zorder=3, capstyle="round")
+            riv = LineCollection(rl, colors=c["river"], linewidths=s["widths"]["river"], zorder=3, capstyle="round",
+                                 alpha=s.get("river_alpha", 1.0))
             self.ax.add_collection(riv)
             lod["artists"].append(riv)
             self.lods.append(lod)
@@ -329,6 +353,14 @@ class Renderer:
                 a1 += lines_of(proj_geom(a["geom"].simplify(0.004)))
         self.admin1_art = LineCollection(a1, colors=c["admin1"], linewidths=s["widths"]["admin1"], linestyles=(0, (4, 3)), zorder=4)
         self.ax.add_collection(self.admin1_art)
+
+        # engraved hatching over all land (brand). It is clipped to whichever land shape is showing.
+        self.land_hatch = None
+        self._lod_shown = None
+        if s.get("land_hatch"):
+            h = s["land_hatch"]
+            self.land_hatch = Hatcher(self.ax, self.lods[0]["land"], h["angle"], h["spacing_px"], h["width_px"],
+                                      h["color"], zorder=2.1)
 
     # ---------- named regions and lines from the episode ----------
     def _build_regions_and_lines(self):
@@ -355,11 +387,25 @@ class Renderer:
             ty = e["type"]
             if ty == "fill":
                 f = s["fills"][e["color"]]
-                p = PathPatch(geom_to_path(self.regions[e["region"]]), fc=f["color"], ec=f.get("edge", "none"),
+                shape = self.regions[e["region"]]
+                path = geom_to_path(shape)
+                p = PathPatch(path, fc=f["color"], ec=f.get("edge", "none"),
                               lw=f.get("edge_width", 0), zorder=2.5 + i * 0.001)
                 p.set_alpha(0)
                 self.ax.add_patch(p)
-                self.art[i] = (p, f["alpha"])
+                extra = {}
+                if f.get("hatch"):  # brand: engraved lines over the territory, clipped to its shape
+                    h = f["hatch"]
+                    extra["hatch"] = Hatcher(self.ax, p, h["angle"], h["spacing_px"], h["width_px"], h["color"],
+                                             zorder=2.6 + i * 0.001, shape_bounds=shape.bounds)
+                if f.get("outline"):  # brand: the territory is always outlined in ink (dashed if contested)
+                    o = PathPatch(path, fc="none", ec=f["outline"], lw=f.get("outline_px", 2) * PT,
+                                  linestyle=(0, (6, 4)) if f.get("dashed") else "solid", joinstyle="round",
+                                  zorder=2.7 + i * 0.001)
+                    o.set_alpha(0)
+                    self.ax.add_patch(o)
+                    extra["outline"] = o
+                self.art[i] = (p, f["alpha"], extra)
             elif ty == "line":
                 ln = self.lines[e["name"]]
                 ls = s["line"]
@@ -373,6 +419,20 @@ class Renderer:
             elif ty == "label":
                 kind = s["labels"][e.get("kind", "city")]
                 x, y = proj_xy(e["lon"], e["lat"])
+                m = None
+                if kind.get("marker"):
+                    (m,) = self.ax.plot([x], [y], marker=kind["marker"], ms=kind["marker_size"], mfc=kind["marker_fc"],
+                                        mec=kind["marker_ec"], mew=1.4, zorder=10.5, alpha=0)
+                if "tracking_px" in kind:
+                    # Brand label: drawn on the overlay as a shape (so small capitals can be letter-spaced),
+                    # and moved every frame to follow its place on the map.
+                    t = PathText(self.ov, e["text"], self.font_files[kind["font"]], e.get("size", kind["size_px"]),
+                                 kind["color"], tracking=kind["tracking_px"], ha=e.get("ha", kind.get("ha", "left")),
+                                 line_height=kind.get("line_height"), zorder=2)
+                    t.set_alpha(0)
+                    dx, dy = e.get("dx", kind.get("dx", 0)), e.get("dy", kind.get("dy", 0))
+                    self.art[i] = ("path", t, m, kind.get("alpha", 1.0), (x, y), (dx, dy))
+                    continue
                 size = e.get("size", kind["size"]) * 1.0
                 text = e["text"]
                 lines = text.split("\n")
@@ -385,21 +445,62 @@ class Renderer:
                                      ha=ha, va="center", color=kind["color"], zorder=11, annotation_clip=False,
                                      fontproperties=self.font(kind["font"], size), path_effects=halo, linespacing=0.95)
                 t.set_alpha(0)
-                m = None
-                if kind.get("marker"):
-                    (m,) = self.ax.plot([x], [y], marker=kind["marker"], ms=kind["marker_size"], mfc=kind["marker_fc"],
-                                        mec=kind["marker_ec"], mew=1.4, zorder=10.5, alpha=0)
                 self.art[i] = (t, m, kind.get("alpha", 1.0))
             elif ty == "caption":
-                self.art[i] = self._make_caption(e)
+                # Brand styles show no caption boxes: the words are spoken (make_voice.py)
+                # and uploaded to YouTube as subtitles instead.
+                if s.get("captions", True):
+                    self.art[i] = self._make_caption(e)
             elif ty == "stamp":
                 k = s["stamp"]
-                t = self.ov.text(k["x"], k["y"], e["text"], ha="left", va="center", color=k["color"], alpha=0,
-                                 fontproperties=self.font(k["font"], k["size"]),
-                                 path_effects=[pe.withStroke(linewidth=k.get("halo_w", 0), foreground=k.get("halo", "none"))] if k.get("halo") else [])
+                if "tracking_px" in k:  # brand kicker: small capitals, letter-spaced
+                    t = PathText(self.ov, e["text"], self.font_files[k["font"]], k["size_px"], k["color"],
+                                 k["x"], k["y"], tracking=k["tracking_px"], zorder=3)
+                    t.set_alpha(0)
+                else:
+                    t = self.ov.text(k["x"], k["y"], e["text"], ha="left", va="center", color=k["color"], alpha=0,
+                                     fontproperties=self.font(k["font"], k["size"]),
+                                     path_effects=[pe.withStroke(linewidth=k.get("halo_w", 0), foreground=k.get("halo", "none"))] if k.get("halo") else [])
                 self.art[i] = (t,)
             elif ty == "title":
-                self.art[i] = self._make_title(e)
+                if self.brand:
+                    self.art[i] = (make_title_card(self.ov, self.font_files, self.palette, e),)
+                else:
+                    self.art[i] = self._make_title(e)
+            # ---- brand-only events ----
+            elif ty == "year":  # date wipe: the year counts from one date to the next
+                k = s["stamp"]
+                t = PathText(self.ov, self._year_text(e, e["from"]), self.font_files[k["font"]], k["size_px"],
+                             k["color"], k["x"], k["y"], tracking=k["tracking_px"], zorder=3)
+                t.set_alpha(0)
+                self.art[i] = (t,)
+            elif ty == "lower_third":
+                self._check_words(e, "kicker", 3)
+                self._check_words(e, "headline", 8)
+                self.art[i] = (make_lower_third(self.ov, self.font_files, self.palette, e),)
+            elif ty == "chapter":
+                self.art[i] = (make_chapter_card(self.ov, self.font_files, self.palette, e),)
+            elif ty == "endscreen":
+                self.art[i] = (make_end_screen(self.ov, self.font_files, self.palette, e),)
+            elif ty == "sting":
+                self.art[i] = (Sting(self.ov, self.font_files, self.palette, e),)
+            elif ty == "cite":  # a short source line shown while a fact is on screen
+                k = s["cite"]
+                t = PathText(self.ov, e["text"], self.font_files[k["font"]], k["size_px"], k["color"],
+                             k["x"], k["y"], ha="center", zorder=3)
+                t.set_alpha(0)
+                self.art[i] = (t,)
+
+    @staticmethod
+    def _year_text(e, year):
+        return f"{e.get('prefix', '')}{int(round(year))}{e.get('suffix', '')}"
+
+    @staticmethod
+    def _check_words(e, key, limit):
+        """The brand allows short lower thirds only. Warn (do not stop) when text is too long."""
+        n = len(e.get(key, "").split())
+        if n > limit:
+            print(f"  WARNING: lower third at t={e['t']}: {key} has {n} words (brand limit {limit})")
 
     def _make_caption(self, e):
         k = self.st["caption"]
@@ -471,6 +572,16 @@ class Renderer:
             self.ov.text(W0 - k.get("x_off", 70), k.get("y", 70), tag, ha="right", va="center", color=k["color"],
                          fontproperties=self.font(k["font"], k["size"]), zorder=4)
         credit = self.ep.get("credit")
+        if self.brand and s.get("credit"):
+            # Brand: credit and draft note sit bottom-LEFT, because YouTube puts the channel
+            # watermark bottom-right.
+            k = s["credit"]
+            if credit:
+                PathText(self.ov, credit, self.font_files[k["font"]], k["size_px"], k["color"], k["x"], k["y"], zorder=3.5)
+            if self.ep.get("draft_tag"):
+                PathText(self.ov, "Draft preview: facts still to be verified", self.font_files[k["font"]], k["size_px"],
+                         self.palette.get("madder", k["color"]), k["x"], k["y"] - 28, zorder=3.5)
+            return
         if credit and s.get("credit"):
             k = s["credit"]
             self.ov.text(W0 - 70, H0 - 62, credit, ha="right", va="center", color=k["color"],
@@ -523,7 +634,18 @@ class Renderer:
             vis = lod["min_h"] <= h < lod["max_h"]
             for a in lod["artists"]:
                 a.set_visible(vis)
+            if vis and self.land_hatch and self._lod_shown is not lod:
+                self.land_hatch.set_clip(lod["land"])  # hatch only the land shape that is showing
+                self._lod_shown = lod
         self.admin1_art.set_alpha(self.st.get("admin1_alpha", 0.6) * (1 - smooth((h - 6.0) / 6.0)))
+
+        # What the camera sees (map units), and how many 1080p pixels one map unit is.
+        # The hatching uses these to keep its lines evenly spaced on screen.
+        view = (center[0] - w / 2, center[0] + w / 2, center[1] - h / 2, center[1] + h / 2)
+        px_per_unit = H0 / h
+        if self.land_hatch:
+            self.land_hatch.update(view, px_per_unit, 1.0)
+        to_overlay = self.ax.transData + self.ov.transData.inverted()  # map units -> overlay pixels
 
         for i, e in enumerate(self.events):
             ty, a = e["type"], self.art.get(i)
@@ -532,6 +654,12 @@ class Renderer:
             if ty == "fill":
                 al = fade(t, e["t"], e.get("dur", 1.5), e.get("out"), e.get("out_dur", 1.5))
                 a[0].set_alpha(al * a[1])
+                extra = a[2]
+                if "hatch" in extra:  # hatch lines appear line by line over "hatch_in" seconds
+                    reveal = smooth((t - e["t"]) / self.st.get("hatch_in", 0.8))
+                    extra["hatch"].update(view, px_per_unit, al, reveal)
+                if "outline" in extra:
+                    extra["outline"].set_alpha(al)
             elif ty == "line":
                 layers, tip = a
                 ln = self.lines[e["name"]]
@@ -550,6 +678,14 @@ class Renderer:
                 tip.set_data([xy[-1, 0]] if drawing and len(xy) else [], [xy[-1, 1]] if drawing and len(xy) else [])
             elif ty == "label":
                 al = fade(t, e["t"], e.get("dur", 1.2), e.get("out"), e.get("out_dur", 1.2))
+                if a[0] == "path":  # brand label: move it to where its place is on screen now
+                    _, txt, marker, base, xy, (dx, dy) = a
+                    px, py = to_overlay.transform(xy)
+                    txt.move(px + dx, py + dy)
+                    txt.set_alpha(al * base)
+                    if marker is not None:
+                        marker.set_alpha(al)
+                    continue
                 a[0].set_alpha(al * a[2])
                 if a[1] is not None:
                     a[1].set_alpha(al)
@@ -568,11 +704,24 @@ class Renderer:
                 a[0].set_alpha(fade(t, e["t"], 0.8, e["t"] + e["dur"], 0.8))
             elif ty == "title":
                 al = fade(t, e["t"], e.get("fade", 1.0), e["t"] + e["dur"], e.get("fade", 1.0))
+                if len(a) == 1:  # brand title card (one group that fades together)
+                    a[0].set_alpha(al)
+                    continue
                 dim, t1, t2, rule = a
                 dim.set_alpha(al * e.get("dim", 0.6))
                 t1.set_alpha(al)
                 t2.set_alpha(al)
                 rule.set_alpha(al)
+            # ---- brand-only events ----
+            elif ty == "year":
+                # count from e["from"] to e["to"] during "dur", then hold, then fade out
+                u = smooth((t - e["t"]) / max(e["dur"], 1e-6))
+                a[0].set_text(self._year_text(e, e["from"] + (e["to"] - e["from"]) * u))
+                a[0].set_alpha(fade(t, e["t"], 0.5, e["t"] + e["dur"] + e.get("hold", 3.0), 0.6))
+            elif ty in ("lower_third", "chapter", "endscreen", "cite"):
+                a[0].set_alpha(fade(t, e["t"], 0.6, e["t"] + e["dur"], 0.6))
+            elif ty == "sting":
+                a[0].draw(t, fade, smooth)
 
         self.fig.canvas.draw()
         return np.asarray(self.fig.canvas.buffer_rgba())
@@ -594,7 +743,7 @@ def main():
     args = ap.parse_args()
 
     episode = json.loads(Path(args.episode).read_text(encoding="utf-8"))
-    style = json.loads(Path(args.style).read_text(encoding="utf-8"))
+    style = load_style(args.style)  # also turns brand names like "@ink" into colours
     print("Loading Natural Earth data ...")
     world = World(args.data)
     print("Building scene ...")

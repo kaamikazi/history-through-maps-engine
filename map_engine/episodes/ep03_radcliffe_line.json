@@ -1,11 +1,12 @@
 {
   "title": "The Radcliffe Line",
   "subtitle": "How Bengal was split in 1947",
+  "note": "Brand video formula: cold open, sting, 3 chapters, return to the present, end screen. Captions are the narration script and the subtitle text (they are not drawn in brand styles). Original 96 s draft is in git (first commit).",
   "channel_tag": "HISTORY THROUGH MAPS",
   "credit": "Map data: Natural Earth (public domain). Modern outlines; the 1947 line is approximate.",
   "draft_tag": true,
   "fps": 30,
-  "duration": 96,
+  "duration": 150,
   "regions": {
     "bengal": "union:admin0:Bangladesh+admin1:India/West Bengal",
     "west": "admin1:India/West Bengal",
@@ -33,7 +34,7 @@
       "height": 23.5
     },
     {
-      "t": 13,
+      "t": 19,
       "center": [
         80.5,
         23.0
@@ -41,7 +42,23 @@
       "height": 21.0
     },
     {
-      "t": 21,
+      "t": 23,
+      "center": [
+        80.5,
+        23.0
+      ],
+      "height": 21.0
+    },
+    {
+      "t": 24.5,
+      "center": [
+        89.2,
+        23.5
+      ],
+      "height": 10.5
+    },
+    {
+      "t": 34,
       "center": [
         89.2,
         23.5
@@ -49,7 +66,7 @@
       "height": 8.8
     },
     {
-      "t": 62,
+      "t": 80,
       "center": [
         89.2,
         23.5
@@ -57,7 +74,7 @@
       "height": 8.3
     },
     {
-      "t": 66,
+      "t": 94,
       "center": [
         89.2,
         23.5
@@ -65,7 +82,7 @@
       "height": 8.3
     },
     {
-      "t": 72,
+      "t": 100,
       "center": [
         89.4,
         23.3
@@ -73,7 +90,7 @@
       "height": 4.7
     },
     {
-      "t": 79,
+      "t": 104,
       "center": [
         89.4,
         23.3
@@ -81,7 +98,7 @@
       "height": 4.7
     },
     {
-      "t": 85,
+      "t": 110,
       "center": [
         89.6,
         23.6
@@ -89,59 +106,85 @@
       "height": 9.6
     },
     {
-      "t": 96,
+      "t": 117,
       "center": [
         89.6,
         23.6
       ],
       "height": 9.6
+    },
+    {
+      "t": 125,
+      "center": [
+        80.5,
+        23.0
+      ],
+      "height": 21.0
+    },
+    {
+      "t": 150,
+      "center": [
+        80.5,
+        23.0
+      ],
+      "height": 21.0
     }
   ],
   "events": [
     {
-      "type": "title",
-      "t": 0.5,
-      "dur": 5.0,
-      "fade": 1.0,
-      "dim": 0.62,
-      "title": "THE RADCLIFFE LINE",
-      "subtitle": "How Bengal was split in 1947"
-    },
-    {
       "type": "stamp",
-      "t": 6.0,
-      "dur": 8.0,
-      "text": "AUGUST 1947"
+      "t": 1.0,
+      "dur": 17.0,
+      "text": "Anno 1947 · Bengal"
     },
     {
       "type": "caption",
-      "t": 6.5,
-      "dur": 6.5,
+      "t": 1.5,
+      "dur": 8.5,
       "text": "August 1947. British rule in India was ending, and two new countries were about to appear: India and Pakistan."
     },
     {
       "type": "fill",
       "region": "bengal",
-      "color": "highlight",
-      "t": 15.0,
-      "dur": 2.5,
-      "out": 59.0,
-      "out_dur": 3.0
+      "color": "territory",
+      "t": 10.5,
+      "dur": 1.2,
+      "out": 76.0,
+      "out_dur": 1.5
     },
     {
       "type": "label",
       "kind": "region",
-      "text": "BENGAL",
+      "text": "Bengal",
       "lon": 89.3,
       "lat": 24.2,
-      "t": 16.0,
-      "dur": 1.5,
-      "out": 58.0,
+      "t": 11.5,
+      "dur": 1.0,
+      "out": 76.0,
       "out_dur": 1.5
     },
     {
       "type": "caption",
-      "t": 16.5,
+      "t": 11.0,
+      "dur": 7.0,
+      "text": "The plan was to cut Bengal in two, between India and Pakistan."
+    },
+    {
+      "type": "sting",
+      "t": 20.0,
+      "dur": 2.5
+    },
+    {
+      "type": "chapter",
+      "t": 22.5,
+      "dur": 4.0,
+      "number": "Chapter I",
+      "title": "Bengal before\nthe line",
+      "years": "1947"
+    },
+    {
+      "type": "caption",
+      "t": 27.5,
       "dur": 7.5,
       "text": "In the east lay Bengal, a huge river delta with tens of millions of people."
     },
@@ -149,12 +192,14 @@
       "type": "label",
       "kind": "water",
       "text": "Ganges",
-      "lon": 88.15,
-      "lat": 25.15,
-      "t": 18.0,
+      "lon": 86.98,
+      "lat": 25.25,
+      "t": 29.0,
       "dur": 1.5,
-      "dx": -4,
-      "dy": 10
+      "dx": 0,
+      "dy": -16,
+      "out": 76.0,
+      "out_dur": 1.5
     },
     {
       "type": "label",
@@ -162,8 +207,10 @@
       "text": "Brahmaputra",
       "lon": 91.4,
       "lat": 26.55,
-      "t": 18.5,
-      "dur": 1.5
+      "t": 29.5,
+      "dur": 1.5,
+      "out": 116.0,
+      "out_dur": 1.5
     },
     {
       "type": "label",
@@ -171,9 +218,9 @@
       "text": "Bay of Bengal",
       "lon": 89.9,
       "lat": 21.05,
-      "t": 19.0,
+      "t": 30.0,
       "dur": 1.5,
-      "out": 36,
+      "out": 35.5,
       "out_dur": 1.5
     },
     {
@@ -182,10 +229,12 @@
       "text": "Calcutta",
       "lon": 88.364,
       "lat": 22.573,
-      "t": 21.0,
+      "t": 33.0,
       "dur": 1.0,
-      "dx": -11,
-      "ha": "right"
+      "dx": -14,
+      "ha": "right",
+      "out": 116.0,
+      "out_dur": 1.5
     },
     {
       "type": "label",
@@ -193,8 +242,10 @@
       "text": "Dacca",
       "lon": 90.41,
       "lat": 23.75,
-      "t": 22.0,
-      "dur": 1.0
+      "t": 34.0,
+      "dur": 1.0,
+      "out": 116.0,
+      "out_dur": 1.5
     },
     {
       "type": "label",
@@ -202,121 +253,184 @@
       "text": "Chittagong",
       "lon": 91.783,
       "lat": 22.357,
-      "t": 23.0,
+      "t": 35.0,
       "dur": 1.0,
-      "dy": -2
+      "out": 116.0,
+      "out_dur": 1.5
+    },
+    {
+      "type": "lower_third",
+      "t": 36.5,
+      "dur": 7.0,
+      "kicker": "Bengal · 1947",
+      "headline": "The Bengal delta",
+      "year": 1947
+    },
+    {
+      "type": "chapter",
+      "t": 45.0,
+      "dur": 4.0,
+      "number": "Chapter II",
+      "title": "Drawing\nthe line",
+      "years": "1947"
     },
     {
       "type": "caption",
-      "t": 25.0,
-      "dur": 7.5,
-      "text": "The plan was to cut Bengal in two, between India and Pakistan."
-    },
-    {
-      "type": "caption",
-      "t": 34.0,
-      "dur": 7.5,
+      "t": 50.0,
+      "dur": 9.0,
       "text": "The job of drawing the line went to Cyril Radcliffe, a British lawyer who had never worked in India before."
+    },
+    {
+      "type": "lower_third",
+      "t": 51.0,
+      "dur": 7.0,
+      "kicker": "Cyril Radcliffe",
+      "headline": "The man who drew the line"
     },
     {
       "type": "line",
       "name": "radcliffe",
-      "t": 42.0,
+      "t": 59.0,
       "dur": 18.0
     },
     {
       "type": "caption",
-      "t": 43.0,
+      "t": 60.0,
       "dur": 7.5,
       "text": "He had only a few weeks. His line ran through farms, villages and rivers."
     },
     {
       "type": "caption",
-      "t": 51.5,
+      "t": 68.5,
       "dur": 8.0,
       "text": "The main idea was to follow religious majorities, but communities lived mixed together in many places."
     },
     {
       "type": "fill",
       "region": "west",
-      "color": "a",
-      "t": 59.0,
-      "dur": 3.0
+      "color": "territory",
+      "t": 77.0,
+      "dur": 1.2
     },
     {
       "type": "fill",
       "region": "east",
-      "color": "b",
-      "t": 59.0,
-      "dur": 3.0
+      "color": "second",
+      "t": 77.0,
+      "dur": 1.2
     },
     {
       "type": "label",
       "kind": "region",
-      "text": "WEST BENGAL\n(INDIA)",
-      "lon": 87.75,
-      "lat": 23.55,
-      "t": 61.0,
-      "dur": 1.5
+      "text": "West Bengal\n(India)",
+      "lon": 87.25,
+      "lat": 23.45,
+      "t": 78.5,
+      "dur": 1.2,
+      "out": 116.0,
+      "out_dur": 1.5,
+      "size": 24
     },
     {
       "type": "label",
       "kind": "region",
-      "text": "EAST BENGAL\n(PAKISTAN)",
+      "text": "East Bengal\n(Pakistan)",
       "lon": 90.05,
       "lat": 24.55,
-      "t": 61.5,
-      "dur": 1.5,
-      "out": 80.0,
-      "out_dur": 1.5
+      "t": 79.0,
+      "dur": 1.2,
+      "out": 108.0,
+      "out_dur": 1.0
+    },
+    {
+      "type": "chapter",
+      "t": 82.0,
+      "dur": 4.0,
+      "number": "Chapter III",
+      "title": "Two Bengals",
+      "years": "1947 – 1971"
     },
     {
       "type": "stamp",
-      "t": 62.0,
+      "t": 86.5,
       "dur": 8.0,
-      "text": "17 AUGUST 1947"
+      "text": "17 August 1947"
     },
     {
       "type": "caption",
-      "t": 62.5,
-      "dur": 7.5,
+      "t": 87.0,
+      "dur": 7.0,
       "text": "The map was made public on 17 August, just after both countries became independent."
     },
     {
       "type": "caption",
-      "t": 72.0,
-      "dur": 7.0,
+      "t": 96.0,
+      "dur": 6.5,
       "text": "Calcutta stayed in India. Dacca became the capital of East Bengal."
     },
     {
-      "type": "stamp",
-      "t": 81.0,
-      "dur": 8.0,
-      "text": "1971"
+      "type": "lower_third",
+      "t": 96.5,
+      "dur": 6.5,
+      "kicker": "Dacca · 1947",
+      "headline": "Capital of East Bengal",
+      "year": 1947
+    },
+    {
+      "type": "year",
+      "t": 104.0,
+      "dur": 3.0,
+      "from": 1947,
+      "to": 1971,
+      "prefix": "Anno ",
+      "hold": 3.0
+    },
+    {
+      "type": "caption",
+      "t": 107.5,
+      "dur": 9.0,
+      "text": "In 1971, East Bengal, by then called East Pakistan, became Bangladesh. The line became the border between India and Bangladesh."
     },
     {
       "type": "label",
       "kind": "region",
-      "text": "BANGLADESH",
+      "text": "Bangladesh",
       "lon": 90.05,
       "lat": 24.55,
-      "t": 82.0,
-      "dur": 1.5
+      "t": 108.5,
+      "dur": 1.2
     },
     {
       "type": "caption",
-      "t": 81.5,
-      "dur": 8.0,
-      "text": "In 1971, East Bengal, by then called East Pakistan, became Bangladesh. The line became the border between India and Bangladesh."
+      "t": 118.0,
+      "dur": 10.0,
+      "text": "Today the border between India and Bangladesh is about 4,096 kilometres long. It is mostly the 1947 line, adjusted by later agreements."
     },
     {
-      "type": "title",
-      "t": 90.0,
-      "dur": 5.8,
-      "fade": 1.0,
-      "dim": 0.93,
-      "title": "4,096 KM",
-      "subtitle": "The India\u2013Bangladesh border today. Mostly the 1947 line, adjusted by later agreements."
+      "type": "lower_third",
+      "t": 119.0,
+      "dur": 9.0,
+      "kicker": "India–Bangladesh border",
+      "headline": "About 4,096 km long",
+      "year": 2025
+    },
+    {
+      "type": "cite",
+      "t": 119.0,
+      "dur": 9.0,
+      "text": "Length: Government of India, Lok Sabha answer, 12 February 2025 (to verify)"
+    },
+    {
+      "type": "endscreen",
+      "t": 132.0,
+      "dur": 18.5,
+      "next": "Dhaka, century by century"
+    },
+    {
+      "type": "caption",
+      "t": 133.5,
+      "dur": 6.0,
+      "text": "The sources are in the description. Next map: Dhaka, century by century."
     }
   ]
 }
