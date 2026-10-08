@@ -1,0 +1,7 @@
+# Big or re-creatable files are kept out of git (data downloads, renders, videos).
+map_engine/data/
+map_engine/out/
+*.mp4
+__pycache__/
+*.pyc
+~$*

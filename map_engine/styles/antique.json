@@ -1,0 +1,176 @@
+{
+  "name": "Antique parchment",
+  "note": "Aged paper, ink lines, water-lines in the sea, compass rose. Uses IM Fell English (OFL).",
+  "fonts": {
+    "title": "IMFeENrm28P.ttf",
+    "label": "IMFeENrm28P.ttf",
+    "label_italic": "IMFeENit28P.ttf",
+    "caption": "IMFeENrm28P.ttf"
+  },
+  "colors": {
+    "sea": "#dccfa6",
+    "land": "#f1e5c4",
+    "border": "#8a6a45",
+    "coast": "#4a3320",
+    "river": "#6f8f9c",
+    "admin1": "#9a7c55",
+    "waterline": "#8a7a52",
+    "title_dim": "#efe2bf"
+  },
+  "widths": {
+    "border": 1.0,
+    "coast": 1.7,
+    "river": 1.3,
+    "admin1": 0.9
+  },
+  "waterlines": {
+    "wide": [
+      0.18,
+      0.4,
+      0.68,
+      1.0
+    ],
+    "close": [
+      0.05,
+      0.11,
+      0.19,
+      0.3,
+      0.44
+    ],
+    "width": 0.9,
+    "alpha": 0.8
+  },
+  "admin1_alpha": 0.75,
+  "fills": {
+    "highlight": {
+      "color": "#d9ad4f",
+      "alpha": 0.5
+    },
+    "a": {
+      "color": "#d98a73",
+      "alpha": 0.55
+    },
+    "b": {
+      "color": "#8fb08a",
+      "alpha": 0.6
+    }
+  },
+  "line": {
+    "ink": "#a52a1b",
+    "core": "#7d1d12",
+    "layers": [
+      [
+        7,
+        0.25,
+        "ink"
+      ],
+      [
+        3.4,
+        1.0,
+        "core"
+      ]
+    ],
+    "tip_size": 10,
+    "tip": "#a52a1b",
+    "tip_edge": "#3a1a10"
+  },
+  "labels": {
+    "city": {
+      "font": "label_italic",
+      "size": 20,
+      "color": "#2f2010",
+      "marker": "o",
+      "marker_size": 8,
+      "marker_fc": "#f1e5c4",
+      "marker_ec": "#2f2010",
+      "halo": "#f1e5c4",
+      "halo_w": 4,
+      "dx": 11,
+      "dy": 2,
+      "ha": "left"
+    },
+    "region": {
+      "font": "label",
+      "size": 30,
+      "color": "#5b3b1c",
+      "tracking": true,
+      "alpha": 0.92,
+      "halo": "#f1e5c4",
+      "halo_w": 4,
+      "ha": "center"
+    },
+    "water": {
+      "font": "label_italic",
+      "size": 22,
+      "color": "#4f6f7d",
+      "alpha": 0.95,
+      "halo": "#dccfa6",
+      "halo_w": 4,
+      "ha": "center"
+    }
+  },
+  "stamp": {
+    "x": 100,
+    "y": 125,
+    "font": "title",
+    "size": 66,
+    "color": "#7d1d12",
+    "halo": "#f1e5c4",
+    "halo_w": 6
+  },
+  "caption": {
+    "y": 905,
+    "font": "caption",
+    "size": 28,
+    "color": "#2f2010",
+    "wrap": 62,
+    "box": "#f1e5c4",
+    "box_edge": "#4a3320",
+    "box_edge_w": 1.6
+  },
+  "title": {
+    "font": "title",
+    "size": 96,
+    "color": "#3a2412",
+    "sub_font": "label_italic",
+    "sub_size": 40,
+    "sub_color": "#5b3b1c",
+    "rule": "#7d1d12",
+    "rule_w": 3,
+    "title_dy": 40,
+    "sub_dy": 150,
+    "rule_dy": 98
+  },
+  "tag": {
+    "font": "label_italic",
+    "size": 28,
+    "color": "#5b3b1c",
+    "x_off": 100,
+    "y": 105
+  },
+  "credit": {
+    "font": "label_italic",
+    "size": 15,
+    "color": "#5b3b1c"
+  },
+  "deco": {
+    "paper": 0.9,
+    "paper_color": [
+      120,
+      85,
+      40
+    ],
+    "vignette": 0.6,
+    "vignette_color": [
+      95,
+      60,
+      22
+    ],
+    "frame": "#4a3320",
+    "compass": [
+      "#4a3320",
+      "#f1e5c4"
+    ],
+    "paper_max": 0.12
+  }
+}
