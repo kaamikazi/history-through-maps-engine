@@ -254,6 +254,110 @@ class World:
 
 
 # --------------------------------------------------------------------------
+# 3a. SOFT TERRITORY WASH  ("softer edges", like hand-coloured atlas maps)
+# --------------------------------------------------------------------------
+def _value_noise(h, w, rng, scales=((48, 1.0), (16, 0.6), (5, 0.35))):
+    """Smooth random texture (0..1): a few blurry random grids added together."""
+    acc = np.zeros((h, w), np.float32)
+    for cell, weight in scales:
+        small = rng.random((max(2, h // cell), max(2, w // cell))).astype(np.float32)
+        acc += weight * np.asarray(Image.fromarray((small * 255).astype(np.uint8)).resize((w, h), Image.BICUBIC),
+                                   np.float32) / 255.0
+    return acc / sum(wt for _, wt in scales)
+
+
+class SoftWash:
+    """A territory painted as a see-through colour wash with a soft, slightly ragged edge
+    and a darker band just inside the border (where watercolour pools on paper).
+
+    It is a picture (not a shape), laid on the map at the territory's position.
+    grow_from: an older shape. If given, the wash can SPREAD outward from that old border
+    (see set(..., spread=...)), which is how gained land appears in a territory timeline.
+
+    Settings (cfg, from the style's fill):
+      color, alpha   the paint colour and how see-through it is
+      soft           width of the soft edge, in map units (1 unit = 1 degree of latitude)
+      rag            0..1, how ragged ("dry brush") the edge is
+      rim, rim_color how strong the darker border band is, and its colour
+    """
+
+    def __init__(self, ax, geom, cfg, z, grow_from=None, seed=1):
+        from matplotlib.colors import to_rgb
+        from PIL import ImageDraw, ImageFilter
+        self.cfg = cfg
+        soft = cfg.get("soft", 0.12)
+        minx, miny, maxx, maxy = geom.bounds
+        pad = soft * 3
+        x0, y0, x1, y1 = minx - pad, miny - pad, maxx + pad, maxy + pad
+        res = min(cfg.get("res", 260), 2400 / max(x1 - x0, y1 - y0))  # mask pixels per map unit
+        W, H = max(8, int((x1 - x0) * res)), max(8, int((y1 - y0) * res))
+
+        def to_px(coords):  # map units -> mask pixels (y goes down in pictures)
+            return [((x - x0) * res, (y1 - y) * res) for x, y in coords]
+
+        # 1. draw the shape as a black/white mask
+        mask = Image.new("L", (W, H), 0)
+        d = ImageDraw.Draw(mask)
+        polys = list(geom.geoms) if hasattr(geom, "geoms") else [geom]
+        for p in polys:
+            if p.geom_type != "Polygon" or p.is_empty:
+                continue
+            d.polygon(to_px(p.exterior.coords), fill=255)
+            for hole in p.interiors:
+                d.polygon(to_px(hole.coords), fill=0)
+        # 2. blur it: this makes the soft edge
+        b = np.asarray(mask.filter(ImageFilter.GaussianBlur(soft * res)), np.float32) / 255.0
+        # 3. roughen the edge with a random texture, then shape it into a clean 0..1 opacity
+        noise = _value_noise(H, W, np.random.default_rng(seed))
+        v = b + (noise - 0.5) * cfg.get("rag", 0.45)
+        a = np.clip((v - 0.2) / 0.55, 0, 1)
+        a = a * a * (3 - 2 * a)
+        # 4. the darker band just inside the border
+        band = np.exp(-((b - 0.68) / 0.13) ** 2) * cfg.get("rim", 0.5) * (b > 0.5)
+        base, rim = np.array(to_rgb(cfg["color"])), np.array(to_rgb(cfg.get("rim_color", cfg["color"])))
+        rgb = base[None, None, :] * (1 - band[..., None]) + rim[None, None, :] * band[..., None]
+        # a little texture inside too, so the wash looks painted rather than flat
+        rgb = np.clip(rgb * (0.93 + 0.14 * noise[..., None]), 0, 1)
+        self.alpha_map = (a * cfg.get("alpha", 0.6)).astype(np.float32)
+        self.rgba = np.dstack([rgb, self.alpha_map]).astype(np.float32)
+        self.im = ax.imshow(self.rgba, extent=(x0, x1, y0, y1), origin="upper", interpolation="bilinear",
+                            zorder=z)
+        self.im.set_alpha(0)
+        self.soft = soft
+        self.dist = None
+        self._spread_shown = None
+        if grow_from is not None:
+            # how far each point is from the old territory (0 inside it), on a coarse grid
+            import shapely
+            step = 4
+            gx = x0 + (np.arange(0, W, step) + 0.5) / res
+            gy = y1 - (np.arange(0, H, step) + 0.5) / res
+            X, Y = np.meshgrid(gx, gy)
+            dist = shapely.distance(shapely.points(X.ravel(), Y.ravel()), grow_from).reshape(X.shape)
+            self.dist = np.asarray(Image.fromarray(dist.astype(np.float32)).resize((W, H), Image.BILINEAR))
+            inside = self.alpha_map > 0.01
+            self.dmax = float(self.dist[inside].max()) if inside.any() else 0.0
+
+    def set(self, alpha, spread=1.0):
+        """Show the wash at this opacity. spread < 1: only the part within that fraction of the
+        distance from the old border is painted yet, with a soft moving front."""
+        self.im.set_visible(alpha > 0.002)
+        if alpha <= 0.002:
+            return
+        if self.dist is not None and spread < 1.0:
+            front = spread * (self.dmax + 2 * self.soft)
+            m = np.clip((front - self.dist) / (1.5 * self.soft) + 0.5, 0, 1)
+            self.rgba[..., 3] = self.alpha_map * m
+            self.im.set_data(self.rgba)
+            self._spread_shown = spread
+        elif self._spread_shown is not None:  # back to fully painted
+            self.rgba[..., 3] = self.alpha_map
+            self.im.set_data(self.rgba)
+            self._spread_shown = None
+        self.im.set_alpha(alpha)
+
+
+# --------------------------------------------------------------------------
 # 3b. TERRITORY OVER TIME  (documentary features, phase B)
 # --------------------------------------------------------------------------
 class TerritoryTimeline:
@@ -269,6 +373,20 @@ class TerritoryTimeline:
     def __init__(self, ax, shapes, fill, z, hatch_in=0.8):
         self.ax, self.fill, self.z, self.hatch_in = ax, fill, z, hatch_in
         self.full, self.outlines, self.trans, self.ghosts = [], [], [], []
+        self.soft = "soft" in fill  # soft-edged wash instead of hatched shapes with ink outlines
+        if self.soft:
+            for k, g in enumerate(shapes):
+                prev = shapes[k - 1] if k else None
+                # the new period's wash can spread outward from the old border
+                self.full.append(SoftWash(ax, g, fill, z, grow_from=prev, seed=k + 1))
+                if prev is None:
+                    self.trans.append(None)
+                    self.ghosts.append(None)
+                    continue
+                lost = self._clean(prev.difference(g.buffer(0.01)))
+                self.trans.append({"lost": SoftWash(ax, lost, fill, z + 0.001, seed=k + 11) if lost.area > 5e-4 else None})
+                self.ghosts.append(self._outline(prev, z + 0.003, dashed=True))
+            return
         for k, g in enumerate(shapes):
             self.full.append(self._piece(g, z))
             self.outlines.append(self._outline(g, z + 0.002))
@@ -320,11 +438,34 @@ class TerritoryTimeline:
         if piece["hatch"]:
             piece["hatch"].update(view, ppu, alpha, reveal)
 
+    def _update_soft(self, periods, k, t, A, change, ghost_s):
+        """Soft mode: gained land spreads out from the old border; lost land fades away."""
+        for i in range(len(periods)):
+            self.full[i].set(0)
+            if self.trans[i]:
+                if self.trans[i]["lost"]:
+                    self.trans[i]["lost"].set(0)
+                self.ghosts[i].set_alpha(0)
+        tk = periods[k]["t"]
+        if k == 0 or t >= tk + change:
+            self.full[k].set(A)
+            if k > 0:
+                self.ghosts[k].set_alpha(A * 0.5 * (1 - smooth((t - tk - change) / ghost_s)))
+        else:
+            u = smooth((t - tk) / change)
+            self.full[k].set(A, spread=u)
+            if self.trans[k]["lost"]:
+                self.trans[k]["lost"].set(A * (1 - u))
+            self.ghosts[k].set_alpha(A * 0.5 * u)
+
     def update(self, e, t, A, view, ppu):
         """Draw the territory at time t. A = overall opacity (fade in at the start / out at the end)."""
         periods = e["periods"]
         change, ghost_s = e.get("change", 1.5), e.get("ghost", 3.0)
         k = max([i for i, p in enumerate(periods) if t >= p["t"]] or [0])
+        if self.soft:
+            self._update_soft(periods, k, t, A, change, ghost_s)
+            return
         # hide everything first, then switch on what this moment needs
         for i in range(len(periods)):
             self._show(self.full[i], 0, view, ppu)
@@ -574,8 +715,11 @@ class Renderer:
         for i, e in enumerate(self.events):
             ty = e["type"]
             if ty == "fill":
-                f = s["fills"][e["color"]]
+                f = self._fill_style(e["color"])
                 shape = self.regions[e["region"]]
+                if "soft" in f:  # soft-edged watercolour wash
+                    self.art[i] = ("soft", SoftWash(self.ax, shape, f, 2.5 + i * 0.001, seed=i + 1))
+                    continue
                 path = geom_to_path(shape)
                 p = PathPatch(path, fc=f["color"], ec=f.get("edge", "none"),
                               lw=f.get("edge_width", 0), zorder=2.5 + i * 0.001)
@@ -681,7 +825,7 @@ class Renderer:
                     self.routes[e["id"]] = (r, e)  # so a marker can ride along it
             elif ty == "territory":  # one territory through several periods (gains hatch in, losses fade)
                 shapes = [self.regions[p["region"]] for p in e["periods"]]
-                self.art[i] = (TerritoryTimeline(self.ax, shapes, s["fills"][e.get("color", "territory")],
+                self.art[i] = (TerritoryTimeline(self.ax, shapes, self._fill_style(e.get("color", "territory")),
                                                  z=2.5 + i * 0.001, hatch_in=s.get("hatch_in", 0.8)),)
             elif ty == "image":  # an artwork in an engraved plate, with a slow pan/zoom and a credit
                 self.art[i] = (ImagePlate(self.ov, self.font_files, self.palette, e, HERE),)
@@ -696,6 +840,25 @@ class Renderer:
                              k["x"], k["y"], ha="center", zorder=3)
                 t.set_alpha(0)
                 self.art[i] = (t,)
+
+    def _soft_images(self):
+        """Every soft-wash picture in this episode (plain fills and territory timelines)."""
+        out = []
+        for a in self.art.values():
+            if a and a[0] == "soft":
+                out.append(a[1].im)
+            elif a and isinstance(a[0], TerritoryTimeline) and a[0].soft:
+                out += [w.im for w in a[0].full]
+                out += [tr["lost"].im for tr in a[0].trans if tr and tr["lost"]]
+        return out
+
+    def _fill_style(self, name):
+        """The fill settings for a colour name. If the style says "fill_edges": "soft",
+        the soft version ("territory_soft") is used when the style has one."""
+        fills = self.st["fills"]
+        if self.st.get("fill_edges") == "soft" and f"{name}_soft" in fills:
+            return fills[f"{name}_soft"]
+        return fills[name]
 
     def _colour(self, c):
         """An episode may name a brand colour ("@madder") or give a plain one ("#aa3322")."""
@@ -853,6 +1016,8 @@ class Renderer:
                     self.land_hatch.set_clip(lod["land"])  # hatch only the land shape that is showing
                 for layer in self.terrain:
                     layer.set_clip_path(lod["land"])
+                for img in self._soft_images():  # soft washes stop at the coast: crisp sea, soft inland borders
+                    img.set_clip_path(lod["land"])
                 self._lod_shown = lod
         self.admin1_art.set_alpha(self.st.get("admin1_alpha", 0.6) * (1 - smooth((h - 6.0) / 6.0)))
 
@@ -870,6 +1035,9 @@ class Renderer:
                 continue
             if ty == "fill":
                 al = fade(t, e["t"], e.get("dur", 1.5), e.get("out"), e.get("out_dur", 1.5))
+                if a[0] == "soft":
+                    a[1].set(al)
+                    continue
                 a[0].set_alpha(al * a[1])
                 extra = a[2]
                 if "hatch" in extra:  # hatch lines appear line by line over "hatch_in" seconds

@@ -82,6 +82,30 @@
       "outline": "@map-border",
       "outline_px": 2.0,
       "dashed": true
+    },
+    "territory_soft": {
+      "color": "@territory",
+      "alpha": 0.62,
+      "soft": 0.14,
+      "rag": 0.45,
+      "rim": 0.55,
+      "rim_color": "@madder"
+    },
+    "second_soft": {
+      "color": "@verdigris",
+      "alpha": 0.55,
+      "soft": 0.14,
+      "rag": 0.45,
+      "rim": 0.4,
+      "rim_color": "@verdigris"
+    },
+    "contested_soft": {
+      "color": "@madder",
+      "alpha": 0.35,
+      "soft": 0.2,
+      "rag": 0.7,
+      "rim": 0.2,
+      "rim_color": "@madder"
     }
   },
   "line": {
@@ -207,5 +231,6 @@
     "light_strength": 0.12,
     "shadow": "ground-sunk",
     "light": "ink"
-  }
+  },
+  "fill_edges": "soft"
 }

@@ -16,6 +16,12 @@ The channel identity is the repo https://github.com/kaamikazi/History-C (antique
 Colours come from `brand/tokens.json` (copied from that repo) by name, e.g. `"@ink"`, `"@territory"`.
 The old `cinematic.json` and `antique.json` are kept but are no longer used for uploads.
 
+Territory edges: the brand styles use `"fill_edges": "soft"` - territories are painted as a see-through
+watercolour wash with a soft, slightly ragged edge (like a hand-coloured atlas), stopping crisply at the
+coast; in a `territory` timeline, gained land spreads outward from the old border. Set `"fill_edges": "hard"`
+in the style for the engraved look instead (hatching + ink outline). Note: brand-book.md says "no gradients,
+no blur"; soft edges were asked for on 2026-10-09, so update the brand book if this becomes the house look.
+
 ## Make things
 ```
 # one test frame (fast)
