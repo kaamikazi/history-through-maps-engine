@@ -525,3 +525,140 @@ class Sting:
         rise = (1 - wa) * 14  # the wordmark settles upward by 14 px as it appears
         self.w1.move(960, 770 + rise)
         self.w2.move(960, 822 + rise)
+
+
+# --------------------------------------------------------------------------
+# 5.  ROUTES (movement arrows) AND MAP MARKERS  - documentary features, phase A
+# --------------------------------------------------------------------------
+def smooth_curve(xy, samples=24):
+    """Turn a few waypoints into a smooth curve that passes through every point
+    (a "Catmull-Rom" curve). xy is an N x 2 array in map units."""
+    xy = np.asarray(xy, float)
+    if len(xy) < 3:
+        t = np.linspace(0, 1, samples)[:, None]
+        return xy[0] + (xy[-1] - xy[0]) * t
+    p = np.vstack([xy[0] * 2 - xy[1], xy, xy[-1] * 2 - xy[-2]])  # extra point at each end
+    out = []
+    for i in range(1, len(p) - 2):
+        p0, p1, p2, p3 = p[i - 1], p[i], p[i + 1], p[i + 2]
+        for s in np.linspace(0, 1, samples, endpoint=False):
+            out.append(0.5 * ((2 * p1) + (-p0 + p2) * s + (2 * p0 - 5 * p1 + 4 * p2 - p3) * s * s
+                              + (-p0 + 3 * p1 - 3 * p2 + p3) * s ** 3))
+    out.append(xy[-1])
+    return np.array(out)
+
+
+class Route:
+    """An arrow that is engraved along a path (a migration, a campaign, a trade route).
+    Solid line = documented route. Dashed line = uncertain or disputed route.
+    The arrowhead keeps the same size on screen at every zoom."""
+
+    def __init__(self, ax, xy, style, color, uncertain=False, zorder=8.5):
+        self.xy = smooth_curve(xy)
+        seg = np.hypot(*np.diff(self.xy, axis=0).T)
+        self.cum = np.concatenate([[0], np.cumsum(seg)])  # distance along the curve
+        self.st = style
+        ls = (0, tuple(style.get("dash_px", [10, 7]))) if uncertain else "solid"
+        (self.line,) = ax.plot([], [], color=color, lw=style["width_px"] * PT, linestyle=ls, zorder=zorder,
+                               solid_capstyle="round", dash_capstyle="butt")
+        self.head = MplPolygon(np.zeros((3, 2)), closed=True, fc=color, ec="none", zorder=zorder + 0.1)
+        ax.add_patch(self.head)
+        self.progress = 0.0
+
+    def point_at(self, p):
+        """Position and direction on the curve after fraction p (0..1) of its length."""
+        d = p * self.cum[-1]
+        k = int(np.clip(np.searchsorted(self.cum, d), 1, len(self.cum) - 1))
+        f = (d - self.cum[k - 1]) / max(self.cum[k] - self.cum[k - 1], 1e-12)
+        pos = self.xy[k - 1] + (self.xy[k] - self.xy[k - 1]) * f
+        direction = self.xy[k] - self.xy[k - 1]
+        return pos, direction / max(np.hypot(*direction), 1e-12), k
+
+    def update(self, p, alpha, px_per_unit):
+        """Draw the first fraction p of the route, with the arrowhead at its tip."""
+        self.progress = p
+        if p <= 0 or alpha <= 0.002:
+            self.line.set_visible(False)
+            self.head.set_visible(False)
+            return
+        tip, dirn, k = self.point_at(p)
+        L = self.st["head_px"] / px_per_unit                     # arrowhead length in map units
+        back = tip - dirn * L * 0.7                               # the line stops inside the head
+        pts = np.vstack([self.xy[:k], back])
+        self.line.set_data(pts[:, 0], pts[:, 1])
+        normal = np.array([-dirn[1], dirn[0]])
+        self.head.set_xy([tip, tip - dirn * L + normal * L * 0.45, tip - dirn * L - normal * L * 0.45])
+        for a in (self.line, self.head):
+            a.set_alpha(alpha)
+            a.set_visible(True)
+
+
+class Marker:
+    """A map symbol that keeps its size on screen: battle cross, site ring, capital,
+    or an army counter (a small engraved plate). It can stay put or ride along a Route."""
+
+    def __init__(self, ov, fonts, P, e, mstyle):
+        self.ov = ov
+        self.patches = []   # drawn around (0, 0), then moved into place every frame
+        self.texts = []     # (PathText, dx, dy)
+        kind = e.get("kind", "site")
+        ms = mstyle[kind]
+        col = ms.get("color", P["ink"])
+        if kind == "battle":
+            # a cross like the brand legend's battle symbol: tall upright, short crossbar
+            s, w = ms["size_px"], ms["width_px"]
+            upright = MPath.unit_rectangle().transformed(Affine2D().scale(w, s).translate(-w / 2, -s * 0.6))
+            bar = MPath.unit_rectangle().transformed(Affine2D().scale(s * 0.62, w).translate(-s * 0.31, -s * 0.3))
+            self._patch(PathPatch(MPath.make_compound_path(upright, bar), fc=col, ec=P["ground"], lw=1.2 * PT))
+        elif kind == "site":  # hollow ring: a place known from archaeology
+            self._patch(Circle((0, 0), ms["size_px"] / 2, fc="none", ec=col, lw=ms["width_px"] * PT))
+        elif kind == "capital":  # ring with a dot inside
+            self._patch(Circle((0, 0), ms["size_px"] / 2, fc="none", ec=col, lw=ms["width_px"] * PT))
+            self._patch(Circle((0, 0), ms["size_px"] / 5, fc=col, ec="none"))
+        elif kind == "army":  # engraved plate with the army's name and (estimated) size
+            lines = [e.get("name", "")] + ([e["size"]] if e.get("size") else [])
+            fs = ms["size_px"]
+            heights = [fs, fs * 0.8]
+            texts = []
+            for i, txt in enumerate(lines):
+                t = PathText(ov, txt, fonts["caps" if i == 0 else "body_italic"], heights[i],
+                             P["ink"] if i == 0 else P["ink-muted"], ha="center",
+                             tracking=2 if i == 0 else 0, zorder=7.2)
+                texts.append(t)
+            width = max(t.patch.get_path().get_extents().width for t in texts) + 2 * fs
+            height = fs * (1.0 + 1.25 * len(lines))
+            top = -height - fs * 0.9   # the plate floats just above the point
+            self._patch(Rectangle((-width / 2, top), width, height, fc=P["ground-raised"], ec=P["ink"], lw=2.4 * PT), z=7.0)
+            self._patch(Rectangle((-width / 2 + 5, top + 5), width - 10, height - 10, fc="none", ec=P["ink"], lw=1 * PT), z=7.1)
+            self._patch(MplPolygon([(-fs * 0.4, top + height), (fs * 0.4, top + height), (0, 0)], closed=True,
+                                   fc=P["ink"], ec="none"), z=7.1)  # little pointer down to the place
+            y = top + fs * 1.45
+            for t, h in zip(texts, heights):
+                self.texts.append((t, 0, y))
+                y += h * 1.4
+        if e.get("label"):
+            lab = PathText(ov, e["label"], fonts["caps"], ms.get("label_px", 24), P["ink"], tracking=3, zorder=7.2)
+            if kind == "battle":  # battle labels sit above-right of the cross, clear of any place label
+                self.texts.append((lab, ms["size_px"] * 0.45, -ms["size_px"] * 0.55))
+            else:
+                self.texts.append((lab, ms.get("size_px", 20) * 0.8 + 8, 9))
+
+    def _patch(self, p, z=7.1):
+        p.set_zorder(z)
+        self.ov.add_patch(p)
+        self.patches.append(p)
+
+    def place(self, px, py):
+        """Move the whole symbol so its point sits at overlay pixel (px, py)."""
+        tr = Affine2D().translate(px, py) + self.ov.transData
+        for p in self.patches:
+            p.set_transform(tr)
+        for t, dx, dy in self.texts:
+            t.move(px + dx, py + dy)
+
+    def set_alpha(self, a):
+        for p in self.patches:
+            p.set_alpha(a)
+            p.set_visible(a > 0.002)
+        for t, _, _ in self.texts:
+            t.set_alpha(a)

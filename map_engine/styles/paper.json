@@ -168,5 +168,37 @@
     ],
     "width": 0.65,
     "alpha": 0.8
+  },
+  "route": {
+    "color": "@ink",
+    "width_px": 3.0,
+    "head_px": 24,
+    "dash_px": [
+      10,
+      7
+    ]
+  },
+  "markers": {
+    "battle": {
+      "size_px": 44,
+      "width_px": 7,
+      "color": "@ink",
+      "label_px": 24
+    },
+    "site": {
+      "size_px": 18,
+      "width_px": 2.6,
+      "color": "@ink",
+      "label_px": 24
+    },
+    "capital": {
+      "size_px": 22,
+      "width_px": 2.6,
+      "color": "@ink",
+      "label_px": 24
+    },
+    "army": {
+      "size_px": 22
+    }
   }
 }

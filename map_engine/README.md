@@ -20,8 +20,13 @@ The old `cinematic.json` and `antique.json` are kept but are no longer used for 
 # one test frame (fast)
 python map_engine.py episodes/ep03_radcliffe_line.json --style styles/lamplight.json --still 40 --scale 0.5 --out out/test.png
 
-# full video, 1080p (slow: about 2 frames a second)      add  --scale 0.6667  for a 720p draft
-python map_engine.py episodes/ep03_radcliffe_line.json --style styles/lamplight.json --out out/ep03_lamplight_1080p.mp4
+# full video, 1080p. --jobs 6 renders 6 parts at once (6 CPU cores, about 1 GB memory each) and joins them.
+# Without --jobs it does about 2 frames a second.      add  --scale 0.6667  for a 720p draft
+python map_engine.py episodes/ep03_radcliffe_line.json --style styles/lamplight.json --jobs 6 --out out/ep03_lamplight_1080p.mp4
+
+# YouTube description: hook, chapter timestamps, sources from source_log.csv, About text,
+# plus a "check before uploading" list (anything still marked to verify)
+python make_description.py episodes/ep03_radcliffe_line.json
 
 # thumbnail 1280x720 (OLD look only - a brand thumbnail with the cartouche is not built yet)
 python thumbnail.py episodes/ep03_radcliffe_line.json styles/cinematic.json out/thumb.png --text "THE LINE THAT|SPLIT BENGAL"
@@ -75,8 +80,15 @@ Copy `episodes/ep03_radcliffe_line.json`. The parts:
 ` for 2 lines), `years`, `dur` |
 | `sting` | 2.5 s logo sting (put it at about 0:20, after the cold open) | `dur` |
 | `cite` | short source line at the bottom while a fact is on screen | `text`, `dur` |
+| `route` | arrow engraved along a path (migration, campaign, trade). Dashed if `uncertain` | `points` [[lon,lat],...], `dur`, `id`, `uncertain`, `out` |
+| `marker` | map symbol: `battle`, `site`, `capital` or `army` (plate with `name` + `size`) | `kind`, `lon`/`lat` or `follow` (a route `id`), `label`, `out` |
 | `endscreen` | last 15-20 s: plates for YouTube's end-screen videos + subscribe | `next`, `dur` |
 | `title` | big title card | `title`, `subtitle`, `kicker`, `dim` |
+
+Episode fields used by `make_description.py`: `source_video` (the name used in source_log.csv),
+`hook` (first line), `opening_title` (name of the 0:00 chapter), `chapters_extra` ([{t, title}]), `music`.
+
+`episodes/ep00_feature_demo.json` shows every feature with placeholder text (never publish it).
 
 Brand video formula (brand/strategy.md): cold open 0-20 s (one map, one date, no logo) -> sting ->
 chapters, each starting with a chapter card -> return to the present (same crop as the first map) -> end screen.

@@ -56,8 +56,8 @@ from shapely.ops import linemerge, unary_union
 from shapely import affinity
 
 # The "History Through Maps" brand pieces (hatching, small-capital text, plates, sting).
-from brand_parts import (PT, Hatcher, PathText, Sting, load_style, make_chapter_card, make_end_screen,
-                         make_lower_third, make_title_card)
+from brand_parts import (PT, Hatcher, Marker, PathText, Route, Sting, load_style, make_chapter_card,
+                         make_end_screen, make_lower_third, make_title_card)
 
 HERE = Path(__file__).resolve().parent
 
@@ -383,6 +383,7 @@ class Renderer:
     def _build_event_artists(self):
         c, s = self.st["colors"], self.st
         self.art = {}
+        self.routes = {}  # route id -> (Route, its event), for markers that follow a route
         for i, e in enumerate(self.events):
             ty = e["type"]
             if ty == "fill":
@@ -484,12 +485,29 @@ class Renderer:
                 self.art[i] = (make_end_screen(self.ov, self.font_files, self.palette, e),)
             elif ty == "sting":
                 self.art[i] = (Sting(self.ov, self.font_files, self.palette, e),)
+            elif ty == "route":  # an arrow engraved along a path (migration, campaign, trade)
+                xy = [proj_xy(lon, lat) for lon, lat in e["points"]]
+                col = self._colour(e.get("color", s["route"]["color"]))
+                r = Route(self.ax, xy, s["route"], col, uncertain=e.get("uncertain", False))
+                self.art[i] = (r,)
+                if e.get("id"):
+                    self.routes[e["id"]] = (r, e)  # so a marker can ride along it
+            elif ty == "marker":  # battle cross, site ring, capital, or army counter
+                self.art[i] = (Marker(self.ov, self.font_files, self.palette, e, s["markers"]),)
             elif ty == "cite":  # a short source line shown while a fact is on screen
                 k = s["cite"]
                 t = PathText(self.ov, e["text"], self.font_files[k["font"]], k["size_px"], k["color"],
                              k["x"], k["y"], ha="center", zorder=3)
                 t.set_alpha(0)
                 self.art[i] = (t,)
+
+    def _colour(self, c):
+        """An episode may name a brand colour ("@madder") or give a plain one ("#aa3322")."""
+        return self.palette.get(c[1:], c) if isinstance(c, str) and c.startswith("@") else c
+
+    def _route_progress(self, e, t):
+        """How much of a route is drawn at time t (0..1), easing in and out."""
+        return smooth((t - e["t"]) / max(e["dur"], 1e-6))
 
     @staticmethod
     def _year_text(e, year):
@@ -722,6 +740,18 @@ class Renderer:
                 a[0].set_alpha(fade(t, e["t"], 0.6, e["t"] + e["dur"], 0.6))
             elif ty == "sting":
                 a[0].draw(t, fade, smooth)
+            elif ty == "route":
+                al = fade(t, e["t"], 0.3, e.get("out"), e.get("out_dur", 1.0))
+                a[0].update(self._route_progress(e, t), al, px_per_unit)
+            elif ty == "marker":
+                if e.get("follow"):  # ride along a route: sit at the arrow's tip
+                    route, re = self.routes[e["follow"]]
+                    xy, _, _ = route.point_at(max(self._route_progress(re, t), 1e-6))
+                else:
+                    xy = proj_xy(e["lon"], e["lat"])
+                px, py = to_overlay.transform(xy)
+                a[0].place(px, py)
+                a[0].set_alpha(fade(t, e["t"], e.get("dur", 0.6), e.get("out"), e.get("out_dur", 0.8)))
 
         self.fig.canvas.draw()
         return np.asarray(self.fig.canvas.buffer_rgba())
@@ -730,6 +760,66 @@ class Renderer:
 # --------------------------------------------------------------------------
 # 5.  COMMAND LINE
 # --------------------------------------------------------------------------
+def render_in_parts(args, episode):
+    """Render the video as several parts AT THE SAME TIME (one per CPU core), then join them.
+    Each part is a separate copy of this program working on its own range of frames.
+    The finished video is exactly the same as a normal render, just made faster."""
+    import os
+    import time
+    fps = int(episode.get("fps", 30))
+    end = args.end if args.end is not None else float(episode["duration"])
+    n0, n1 = int(round(args.start * fps)), int(round(end * fps))
+    jobs = max(1, min(args.jobs, n1 - n0))
+    edges = [n0 + (n1 - n0) * k // jobs for k in range(jobs + 1)]  # frame numbers where parts meet
+    out = Path(args.out)
+    parts_dir = out.parent / f"_parts_{out.stem}"
+    parts_dir.mkdir(parents=True, exist_ok=True)
+
+    procs, logs, handles = [], [], []
+    for k in range(jobs):
+        part = parts_dir / f"part_{k:02d}.mp4"
+        log = parts_dir / f"part_{k:02d}.log"
+        cmd = [sys.executable, "-u", str(Path(__file__).resolve()), args.episode, "--style", args.style,
+               "--out", str(part), "--data", args.data, "--scale", str(args.scale),
+               "--frames", f"{edges[k]}:{edges[k + 1]}"]
+        logs.append(log)
+        handles.append(open(log, "w"))
+        procs.append(subprocess.Popen(cmd, stdout=handles[-1], stderr=subprocess.STDOUT))
+    print(f"Rendering {n1 - n0} frames in {jobs} parts at once ...")
+
+    def frames_done():  # read the last "frame N/M" line of each part's log
+        total = 0
+        for log in logs:
+            lines = [l for l in log.read_text(errors="ignore").splitlines() if "frame " in l]
+            if lines:
+                total += int(lines[-1].split("frame ")[1].split("/")[0])
+        return total
+
+    started = time.time()
+    while any(p.poll() is None for p in procs):
+        time.sleep(15)
+        done = frames_done()
+        mins = (time.time() - started) / 60
+        print(f"  about {done}/{n1 - n0} frames done ({mins:.1f} min)", flush=True)
+    for h in handles:  # Windows cannot delete a file that is still open
+        h.close()
+    failed = [k for k, p in enumerate(procs) if p.returncode != 0]
+    if failed:
+        sys.exit(f"Part(s) {failed} failed - see the .log files in {parts_dir}")
+
+    # join the parts without re-encoding (they were all made with the same settings)
+    listing = parts_dir / "parts.txt"
+    # names in this list are read relative to the list file itself, so give bare file names
+    lines = [f"file 'part_{k:02d}.mp4'" for k in range(jobs)]
+    listing.write_text("\n".join(lines) + "\n")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(listing),
+                    "-c", "copy", "-movflags", "+faststart", str(out)], check=True)
+    for f in parts_dir.iterdir():  # the parts were only temporary
+        f.unlink()
+    parts_dir.rmdir()
+    print("Saved", out)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Render a History Through Maps episode.")
     ap.add_argument("episode", help="episode JSON file")
@@ -740,15 +830,22 @@ def main():
     ap.add_argument("--still", type=float, help="save a single frame at this time (seconds)")
     ap.add_argument("--start", type=float, default=0.0)
     ap.add_argument("--end", type=float, default=None)
+    ap.add_argument("--jobs", type=int, default=1,
+                    help="render in this many parts at once (each uses one CPU core and about 1 GB of memory)")
+    ap.add_argument("--frames", help=argparse.SUPPRESS)  # used internally by --jobs: exact frames "first:last"
     args = ap.parse_args()
 
     episode = json.loads(Path(args.episode).read_text(encoding="utf-8"))
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    if args.jobs > 1 and args.still is None:
+        render_in_parts(args, episode)
+        return
+
     style = load_style(args.style)  # also turns brand names like "@ink" into colours
     print("Loading Natural Earth data ...")
     world = World(args.data)
     print("Building scene ...")
     r = Renderer(episode, style, world, scale=args.scale)
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
 
     if args.still is not None:
         frame = r.draw(args.still)
@@ -756,8 +853,11 @@ def main():
         print("Saved", args.out)
         return
 
-    end = args.end if args.end is not None else r.duration
-    n0, n1 = int(args.start * r.fps), int(end * r.fps)
+    if args.frames:  # one part of a --jobs render
+        n0, n1 = (int(x) for x in args.frames.split(":"))
+    else:
+        end = args.end if args.end is not None else r.duration
+        n0, n1 = int(round(args.start * r.fps)), int(round(end * r.fps))
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{r.W}x{r.H}",
            "-r", str(r.fps), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-preset", "medium",
            "-movflags", "+faststart", args.out]
@@ -765,7 +865,7 @@ def main():
     for n in range(n0, n1):
         frame = r.draw(n / r.fps)
         ff.stdin.write(frame.tobytes())
-        if n % 60 == 0:
+        if (n - n0) % 30 == 0:
             print(f"  frame {n - n0 + 1}/{n1 - n0}  (t={n / r.fps:.1f}s)", flush=True)
     ff.stdin.close()
     ff.wait()

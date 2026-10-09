@@ -432,5 +432,14 @@
       "dur": 6.0,
       "text": "The sources are in the description. Next map: Dhaka, century by century."
     }
+  ],
+  "source_video": "EP03 Radcliffe Line",
+  "hook": "In August 1947 a line was drawn across Bengal in a few weeks. This is that line, on the map.",
+  "opening_title": "August 1947",
+  "chapters_extra": [
+    {
+      "t": 117,
+      "title": "The border today"
+    }
   ]
 }

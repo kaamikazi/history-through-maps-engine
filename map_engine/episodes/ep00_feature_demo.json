@@ -1,0 +1,224 @@
+{
+  "title": "Feature demo",
+  "subtitle": "Test of engine features - placeholder text, NOT a real episode",
+  "note": "Every name, number and route here is a made-up placeholder for testing the engine. No historical claims. Never publish.",
+  "source_video": "EP00 Feature demo",
+  "hook": "Placeholder hook line for testing the description generator.",
+  "credit": "Map data: Natural Earth (public domain). TEST FILE - placeholder content only.",
+  "draft_tag": true,
+  "fps": 30,
+  "duration": 40,
+  "regions": {
+    "a": "admin0:Nepal",
+    "b": "admin0:Bhutan"
+  },
+  "camera": [
+    {
+      "t": 0,
+      "center": [
+        84.0,
+        25.5
+      ],
+      "height": 14.0
+    },
+    {
+      "t": 16,
+      "center": [
+        84.0,
+        25.5
+      ],
+      "height": 12.0
+    },
+    {
+      "t": 24,
+      "center": [
+        86.5,
+        25.0
+      ],
+      "height": 7.0
+    },
+    {
+      "t": 40,
+      "center": [
+        86.5,
+        25.0
+      ],
+      "height": 7.0
+    }
+  ],
+  "chapters_extra": [
+    {
+      "t": 0,
+      "title": "Opening (placeholder)"
+    },
+    {
+      "t": 30,
+      "title": "End (placeholder)"
+    }
+  ],
+  "events": [
+    {
+      "type": "stamp",
+      "t": 0.5,
+      "dur": 6,
+      "text": "Anno 0000 · Placeholder"
+    },
+    {
+      "type": "caption",
+      "t": 1,
+      "dur": 5,
+      "text": "This is placeholder narration for testing only."
+    },
+    {
+      "type": "fill",
+      "region": "a",
+      "color": "territory",
+      "t": 1.5,
+      "dur": 1.0
+    },
+    {
+      "type": "fill",
+      "region": "b",
+      "color": "second",
+      "t": 2.0,
+      "dur": 1.0
+    },
+    {
+      "type": "marker",
+      "kind": "capital",
+      "lon": 77.2,
+      "lat": 28.6,
+      "t": 3,
+      "label": "Place A"
+    },
+    {
+      "type": "marker",
+      "kind": "site",
+      "lon": 88.4,
+      "lat": 22.6,
+      "t": 3.5,
+      "label": "Site B"
+    },
+    {
+      "type": "route",
+      "id": "r1",
+      "t": 4,
+      "dur": 8,
+      "points": [
+        [
+          77.2,
+          28.6
+        ],
+        [
+          80.9,
+          26.8
+        ],
+        [
+          85.1,
+          25.6
+        ],
+        [
+          88.4,
+          22.6
+        ]
+      ]
+    },
+    {
+      "type": "marker",
+      "kind": "army",
+      "follow": "r1",
+      "t": 4,
+      "name": "Army A",
+      "size": "c. 0,000 (placeholder)",
+      "out": 13,
+      "out_dur": 0.8
+    },
+    {
+      "type": "route",
+      "t": 6,
+      "dur": 6,
+      "uncertain": true,
+      "points": [
+        [
+          75.8,
+          22.7
+        ],
+        [
+          79.1,
+          21.1
+        ],
+        [
+          83.0,
+          21.5
+        ],
+        [
+          85.8,
+          20.3
+        ]
+      ]
+    },
+    {
+      "type": "label",
+      "kind": "water",
+      "text": "Uncertain route (dashed)",
+      "lon": 80.5,
+      "lat": 20.4,
+      "t": 9,
+      "dur": 1,
+      "out": 12.5,
+      "out_dur": 0.5
+    },
+    {
+      "type": "marker",
+      "kind": "battle",
+      "lon": 88.4,
+      "lat": 22.6,
+      "t": 12.5,
+      "dur": 0.4,
+      "label": "Battle B (placeholder)"
+    },
+    {
+      "type": "lower_third",
+      "t": 13,
+      "dur": 5,
+      "kicker": "Placeholder · 0000",
+      "headline": "A test lower third",
+      "year": "0000"
+    },
+    {
+      "type": "cite",
+      "t": 13,
+      "dur": 5,
+      "text": "Source: placeholder citation line"
+    },
+    {
+      "type": "chapter",
+      "t": 18,
+      "dur": 4,
+      "number": "Chapter I",
+      "title": "Placeholder\nchapter",
+      "years": "0000"
+    },
+    {
+      "type": "caption",
+      "t": 23,
+      "dur": 5,
+      "text": "More placeholder narration, still for testing only."
+    },
+    {
+      "type": "year",
+      "t": 24,
+      "dur": 3,
+      "from": 1000,
+      "to": 1100,
+      "prefix": "Anno ",
+      "hold": 2
+    },
+    {
+      "type": "endscreen",
+      "t": 30,
+      "dur": 10.5,
+      "next": "Placeholder next map"
+    }
+  ]
+}
