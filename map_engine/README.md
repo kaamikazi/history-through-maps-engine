@@ -41,6 +41,10 @@ python make_voice.py episodes/ep03_radcliffe_line.json --env "E:/arts and stuff/
 
 # 2. put it into a finished video (makes ..._voice.mp4, the original is kept)
 python add_voice.py out/ep03_lamplight_1080p.mp4 out/voice/ep03_radcliffe_line/narration.wav
+
+# 2b. ... with a music bed (19 dB under the voice) and the sting sound at the sting's time
+python make_sting_sound.py          (once: makes out/audio/sting.wav - our own sound, no licence needed)
+python add_voice.py out/ep03_lamplight_1080p.mp4 out/voice/ep03_radcliffe_line/narration.wav --music music/track.mp3 --sting-sfx out/audio/sting.wav --episode episodes/ep03_radcliffe_line.json
 ```
 - It also writes `out/voice/<episode>/<episode>.srt`: subtitles for YouTube (Studio > Subtitles > Upload file).
   Brand styles show no caption boxes on screen, so upload this file with every video.
@@ -50,7 +54,9 @@ python add_voice.py out/ep03_lamplight_1080p.mp4 out/voice/ep03_radcliffe_line/n
 - `make_voice.py` prints a timing check. If a line is TOO LONG, give that caption more time in the episode JSON.
 - The free Gemini key allows only about 10 voice requests a day. If it stops, run it again tomorrow
   (finished clips are kept), or turn on billing in Google AI Studio.
-- `add_voice.py` sets the loudness to -14 LUFS, the level YouTube plays at.
+- `add_voice.py` sets the voice to -14 LUFS (YouTube's level), music 19 dB under it (brand: 18-20 dB),
+  and keeps peaks under about -1 dB. Music must be cleared for monetized use (e.g. YouTube Audio Library):
+  log it in source_log.csv and in the episode's `music` list, so make_description.py credits it.
 
 ## Folders
 - `map_engine.py`   the engine (comments explain each part)
