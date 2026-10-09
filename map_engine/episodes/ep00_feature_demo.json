@@ -10,7 +10,10 @@
   "duration": 40,
   "regions": {
     "a": "admin0:Nepal",
-    "b": "admin0:Bhutan"
+    "b": "admin0:Bhutan",
+    "p1": "file:episodes/shapes/ep00/period_1.geojson",
+    "p2": "file:episodes/shapes/ep00/period_2.geojson",
+    "p3": "file:episodes/shapes/ep00/period_3.geojson"
   },
   "camera": [
     {
@@ -74,7 +77,9 @@
       "region": "a",
       "color": "territory",
       "t": 1.5,
-      "dur": 1.0
+      "dur": 1.0,
+      "out": 20.0,
+      "out_dur": 1.0
     },
     {
       "type": "fill",
@@ -219,6 +224,27 @@
       "t": 30,
       "dur": 10.5,
       "next": "Placeholder next map"
+    },
+    {
+      "type": "territory",
+      "color": "territory",
+      "dur": 1.0,
+      "change": 1.6,
+      "ghost": 2.5,
+      "periods": [
+        {
+          "t": 23.0,
+          "region": "p1"
+        },
+        {
+          "t": 25.5,
+          "region": "p2"
+        },
+        {
+          "t": 28.0,
+          "region": "p3"
+        }
+      ]
     }
   ]
 }

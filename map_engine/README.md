@@ -62,7 +62,9 @@ python add_voice.py out/ep03_lamplight_1080p.mp4 out/voice/ep03_radcliffe_line/n
 
 ## Writing a new episode
 Copy `episodes/ep03_radcliffe_line.json`. The parts:
-- `regions`  named shapes, picked with selectors: `admin0:India`, `admin1:India/West Bengal`, `union:a+b`
+- `regions`  named shapes, picked with selectors: `admin0:India`, `admin1:India/West Bengal`, `union:a+b`,
+             or `file:episodes/shapes/<episode>/<name>.geojson` for a shape WE drew from cited sources
+             (lon/lat GeoJSON; keep a "source" note in each file's properties and log it in source_log.csv)
 - `lines`    a border between two shapes, drawn as an animated line
 - `camera`   keyframes: time, centre [lon, lat], height in degrees (smaller = more zoomed in)
 - `events`   each has a type and a start time `t` (seconds):
@@ -80,6 +82,7 @@ Copy `episodes/ep03_radcliffe_line.json`. The parts:
 ` for 2 lines), `years`, `dur` |
 | `sting` | 2.5 s logo sting (put it at about 0:20, after the cold open) | `dur` |
 | `cite` | short source line at the bottom while a fact is on screen | `text`, `dur` |
+| `territory` | one territory through several periods: gained land hatches in, lost land fades and leaves a dashed ghost border (no invented in-between borders) | `periods` [{t, region}], `color`, `change`, `ghost`, `out` |
 | `route` | arrow engraved along a path (migration, campaign, trade). Dashed if `uncertain` | `points` [[lon,lat],...], `dur`, `id`, `uncertain`, `out` |
 | `marker` | map symbol: `battle`, `site`, `capital` or `army` (plate with `name` + `size`) | `kind`, `lon`/`lat` or `follow` (a route `id`), `label`, `out` |
 | `endscreen` | last 15-20 s: plates for YouTube's end-screen videos + subscribe | `next`, `dur` |

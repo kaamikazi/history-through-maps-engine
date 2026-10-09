@@ -1,0 +1,55 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "name": "period_3",
+    "note": "PLACEHOLDER test shape - not a historical border"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       85.9,
+       24.3
+      ],
+      [
+       86.6,
+       23.9
+      ],
+      [
+       88.1,
+       23.6
+      ],
+      [
+       89.3,
+       24.4
+      ],
+      [
+       88.9,
+       25.6
+      ],
+      [
+       87.4,
+       26.0
+      ],
+      [
+       86.0,
+       25.9
+      ],
+      [
+       85.5,
+       25.2
+      ],
+      [
+       85.9,
+       24.3
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}

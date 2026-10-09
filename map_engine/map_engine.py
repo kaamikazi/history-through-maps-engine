@@ -190,6 +190,17 @@ class World:
         if spec.startswith("union:"):
             parts = spec[len("union:"):].split("+")
             return unary_union([self.select(p) for p in parts])
+        if spec.startswith("file:"):
+            # A shape we drew ourselves from cited sources, saved as GeoJSON (lon/lat).
+            # The path is relative to the map_engine folder, e.g. "file:episodes/shapes/ep02/mughal.geojson"
+            path = HERE / spec[len("file:"):]
+            data = json.loads(path.read_text(encoding="utf-8"))
+            feats = data["features"] if data.get("type") == "FeatureCollection" else [data]
+            geoms = [shape(f["geometry"] if "geometry" in f else f) for f in feats]
+            g = unary_union([x if x.is_valid else x.buffer(0) for x in geoms])
+            if g.is_empty:
+                raise ValueError(f"Empty shape in {path}")
+            return g
         if spec.startswith("admin0:"):
             name = spec[len("admin0:"):]
             geoms = [c["geom"] for c in self.countries if c["name"] == name]
@@ -243,6 +254,104 @@ class World:
 
 
 # --------------------------------------------------------------------------
+# 3b. TERRITORY OVER TIME  (documentary features, phase B)
+# --------------------------------------------------------------------------
+class TerritoryTimeline:
+    """One territory that changes shape over several periods (an empire growing and shrinking).
+
+    Between two periods we do NOT morph one border into the next, because the in-between
+    shapes would be borders that never existed. Instead, like an engraver correcting a plate:
+      - land that is GAINED hatches in, line by line;
+      - land that is LOST fades away, and the old border stays as a faint dashed "ghost" for a while;
+      - land kept in both periods stays as it is.
+    """
+
+    def __init__(self, ax, shapes, fill, z, hatch_in=0.8):
+        self.ax, self.fill, self.z, self.hatch_in = ax, fill, z, hatch_in
+        self.full, self.outlines, self.trans, self.ghosts = [], [], [], []
+        for k, g in enumerate(shapes):
+            self.full.append(self._piece(g, z))
+            self.outlines.append(self._outline(g, z + 0.002))
+            if k == 0:
+                self.trans.append(None)
+                self.ghosts.append(None)
+                continue
+            prev = shapes[k - 1]
+            eps = 0.01  # ignore hair-thin slivers where two hand-drawn borders almost meet
+            kept = prev.intersection(g)
+            gained = self._clean(g.difference(prev.buffer(eps)))
+            lost = self._clean(prev.difference(g.buffer(eps)))
+            self.trans.append({"kept": self._piece(kept, z), "gained": self._piece(gained, z),
+                               "lost": self._piece(lost, z)})
+            self.ghosts.append(self._outline(prev, z + 0.003, dashed=True))
+
+    @staticmethod
+    def _clean(g):
+        """Drop tiny leftover bits (smaller than about 0.0005 square map units)."""
+        polys = list(g.geoms) if hasattr(g, "geoms") else [g]
+        polys = [p for p in polys if p.geom_type == "Polygon" and p.area > 5e-4]
+        return unary_union(polys) if polys else box(0, 0, 0, 0)
+
+    def _piece(self, g, z):
+        """A filled, hatched patch for one shape (hidden until asked for)."""
+        f = self.fill
+        p = PathPatch(geom_to_path(g), fc=f["color"], ec="none", lw=0, zorder=z)
+        p.set_alpha(0)
+        self.ax.add_patch(p)
+        hatch = None
+        if f.get("hatch") and not g.is_empty:
+            h = f["hatch"]
+            hatch = Hatcher(self.ax, p, h["angle"], h["spacing_px"], h["width_px"], h["color"],
+                            zorder=z + 0.001, shape_bounds=g.bounds)
+        return {"patch": p, "hatch": hatch}
+
+    def _outline(self, g, z, dashed=False):
+        f = self.fill
+        o = PathPatch(geom_to_path(g), fc="none", ec=f.get("outline", "black"),
+                      lw=f.get("outline_px", 2) * PT * (0.8 if dashed else 1.0),
+                      linestyle=(0, (5, 4)) if dashed else "solid", joinstyle="round", zorder=z)
+        o.set_alpha(0)
+        self.ax.add_patch(o)
+        return o
+
+    def _show(self, piece, alpha, view, ppu, reveal=1.0):
+        piece["patch"].set_alpha(alpha * self.fill["alpha"])
+        piece["patch"].set_visible(alpha > 0.002)
+        if piece["hatch"]:
+            piece["hatch"].update(view, ppu, alpha, reveal)
+
+    def update(self, e, t, A, view, ppu):
+        """Draw the territory at time t. A = overall opacity (fade in at the start / out at the end)."""
+        periods = e["periods"]
+        change, ghost_s = e.get("change", 1.5), e.get("ghost", 3.0)
+        k = max([i for i, p in enumerate(periods) if t >= p["t"]] or [0])
+        # hide everything first, then switch on what this moment needs
+        for i in range(len(periods)):
+            self._show(self.full[i], 0, view, ppu)
+            self.outlines[i].set_alpha(0)
+            if self.trans[i]:
+                for piece in self.trans[i].values():
+                    self._show(piece, 0, view, ppu)
+                self.ghosts[i].set_alpha(0)
+        tk = periods[k]["t"]
+        if k == 0 or t >= tk + change:  # a settled period
+            reveal = smooth((t - tk) / self.hatch_in) if k == 0 else 1.0
+            self._show(self.full[k], A, view, ppu, reveal)
+            self.outlines[k].set_alpha(A)
+            if k > 0:  # the old border lingers as a dashed ghost, then fades
+                self.ghosts[k].set_alpha(A * 0.6 * (1 - smooth((t - tk - change) / ghost_s)))
+        else:  # changing from period k-1 to period k
+            u = smooth((t - tk) / change)
+            tr = self.trans[k]
+            self._show(tr["kept"], A, view, ppu)
+            self._show(tr["gained"], A * u, view, ppu, reveal=u)  # gained land hatches in
+            self._show(tr["lost"], A * (1 - u), view, ppu)        # lost land fades away
+            self.outlines[k - 1].set_alpha(A * (1 - u))
+            self.outlines[k].set_alpha(A * u)
+            self.ghosts[k].set_alpha(A * 0.6 * u)
+
+
+# --------------------------------------------------------------------------
 # 4.  THE RENDERER
 # --------------------------------------------------------------------------
 W0, H0 = 1920, 1080  # full-size video frame
@@ -259,6 +368,9 @@ class Renderer:
         # Brand styles name fonts by their job (display, caps, body...). Full file paths:
         self.font_files = {k: self.fonts_dir / v for k, v in style.get("fonts", {}).items()}
         self.palette = style.get("palette", {})  # every brand colour, by token name
+        for e in episode["events"]:  # a territory timeline starts at its first period
+            if e["type"] == "territory":
+                e.setdefault("t", e["periods"][0]["t"])
         self.events = sorted(episode["events"], key=lambda e: e["t"])
         self.cam_keys = sorted(episode["camera"], key=lambda k: k["t"])
         self.duration = float(episode["duration"])
@@ -492,6 +604,10 @@ class Renderer:
                 self.art[i] = (r,)
                 if e.get("id"):
                     self.routes[e["id"]] = (r, e)  # so a marker can ride along it
+            elif ty == "territory":  # one territory through several periods (gains hatch in, losses fade)
+                shapes = [self.regions[p["region"]] for p in e["periods"]]
+                self.art[i] = (TerritoryTimeline(self.ax, shapes, s["fills"][e.get("color", "territory")],
+                                                 z=2.5 + i * 0.001, hatch_in=s.get("hatch_in", 0.8)),)
             elif ty == "marker":  # battle cross, site ring, capital, or army counter
                 self.art[i] = (Marker(self.ov, self.font_files, self.palette, e, s["markers"]),)
             elif ty == "cite":  # a short source line shown while a fact is on screen
@@ -740,6 +856,9 @@ class Renderer:
                 a[0].set_alpha(fade(t, e["t"], 0.6, e["t"] + e["dur"], 0.6))
             elif ty == "sting":
                 a[0].draw(t, fade, smooth)
+            elif ty == "territory":
+                A = fade(t, e["periods"][0]["t"], e.get("dur", 1.2), e.get("out"), e.get("out_dur", 1.5))
+                a[0].update(e, t, A, view, px_per_unit)
             elif ty == "route":
                 al = fade(t, e["t"], 0.3, e.get("out"), e.get("out_dur", 1.0))
                 a[0].update(self._route_progress(e, t), al, px_per_unit)
