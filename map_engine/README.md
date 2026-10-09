@@ -99,6 +99,8 @@ Copy `episodes/ep03_radcliffe_line.json`. The parts:
 | `image` | an artwork in an engraved plate over the dimmed map, slow pan/zoom, credit line. `tone: false` keeps original colours | `file`, `credit`, `dur`, `pan` {from:[cx,cy,zoom], to:[...]}, `pos`, `plate` [w,h] |
 | `map_overlay` | a scanned old map pinned to 3+ known points and faded over the map | `file`, `points` [[x px, y px, lon, lat], ...], `alpha`, `tone`, `out` |
 | `route` | arrow engraved along a path (migration, campaign, trade). Dashed if `uncertain` | `points` [[lon,lat],...], `dur`, `id`, `uncertain`, `out` |
+| `troops` | formation of soldier figures we drew (`infantry`, `archers`, `cavalry`) in a side's colour, with a banner; faces the way its route goes. The figures are a picture, not the army's size: put the sourced number in `label` | `kind`, `rows`, `cols`, `color` ("@territory" / "@verdigris"), `lon`/`lat` or `follow`, `facing`, `label`, `size_px`, `out` |
+| `portrait` | a general's / ruler's portrait (public domain, logged) in an engraved oval medallion with name, dates and credit; sits beside a place or follows a route, with a leader line | `file`, `name`, `dates`, `credit`, `lon`/`lat` or `follow`, `offset` [dx, dy], `face` [x, y], `zoom`, `size_px`, `tone`, `out` |
 | `marker` | map symbol: `battle`, `site`, `capital` or `army` (plate with `name` + `size`) | `kind`, `lon`/`lat` or `follow` (a route `id`), `label`, `out` |
 | `endscreen` | last 15-20 s: plates for YouTube's end-screen videos + subscribe | `next`, `dur` |
 | `title` | big title card | `title`, `subtitle`, `kicker`, `dim` |

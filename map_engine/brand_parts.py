@@ -737,3 +737,166 @@ class ImagePlate:
         left = min(max(bx + bw / 2 - cx * w, bx + bw - w), bx)
         top = min(max(by + bh / 2 - cy * h, by + bh - h), by)
         self.im.set_extent((left, left + w, top + h, top))
+
+
+# --------------------------------------------------------------------------
+# 7.  GENERALS AND TROOPS  - portraits in medallions, formations of soldier figures
+# --------------------------------------------------------------------------
+def _soldier_paths(kind):
+    """One soldier figure, drawn by us (no outside art), in a box about 40 units tall.
+    (0, 0) is between the feet; y goes DOWN (overlay pixels). Returns (filled shapes, lines)."""
+    def poly(pts):
+        return MPath(pts + [pts[0]], [MPath.MOVETO] + [MPath.LINETO] * (len(pts) - 1) + [MPath.CLOSEPOLY])
+
+    def circle(cx, cy, r):
+        return MPath.circle((cx, cy), r)
+
+    fills, lines = [], []
+    if kind == "cavalry":
+        fills.append(poly([(-15, -10), (-13, -18), (6, -19), (12, -24), (17, -22), (13, -15), (10, -10)]))  # horse
+        for x in (-12, -8, 5, 9):  # four legs
+            fills.append(poly([(x, -11), (x + 2.5, -11), (x + 2.5, 0), (x, 0)]))
+        fills.append(poly([(-4, -19), (2, -19), (1, -31), (-3, -31)]))  # rider's body
+        fills.append(circle(-1, -34, 3.2))                               # rider's head
+        lines.append([(4, -44), (-2, -22)])                              # lance
+    else:
+        fills.append(circle(0, -33, 3.6))                                     # head
+        fills.append(poly([(-5, -28), (5, -28), (6.5, -12), (-6.5, -12)]))   # body
+        fills.append(poly([(-5, -12), (-1.5, -12), (-2, 0), (-5.5, 0)]))     # legs
+        fills.append(poly([(1.5, -12), (5, -12), (5.5, 0), (2, 0)]))
+        if kind == "archers":
+            a = np.linspace(-1.1, 1.1, 14)
+            lines.append(list(zip(8 + 9 * np.cos(a), -20 + 13 * np.sin(a))))  # the bow
+            lines.append([(8 + 9 * np.cos(-1.1), -20 + 13 * np.sin(-1.1)),
+                          (8 + 9 * np.cos(1.1), -20 + 13 * np.sin(1.1))])     # bowstring
+        else:  # infantry: shield and spear
+            fills.append(MPath.unit_circle().transformed(Affine2D().scale(4.5, 7).translate(-6.5, -19)))
+            lines.append([(7.5, -44), (7.5, 0)])
+    return fills, lines
+
+
+class Troops:
+    """A formation of soldier figures (our own drawings) in one side's colour, with a banner.
+    It keeps its size on screen, can stand still or march along a route, and turns to face
+    the way it is going. Numbers of figures are only a picture of a force, never its size:
+    the real (sourced) size belongs in a label like 'c. 50,000 (est.)'."""
+
+    def __init__(self, ov, fonts, P, e, color):
+        self.ov = ov
+        kind = e.get("kind", "infantry")
+        rows, cols = e.get("rows", 2), e.get("cols", 5)
+        scale = e.get("size_px", 34) / 44.0          # figure height on screen
+        gap_x, gap_y = 17 * scale * 1.6, 12 * scale * 1.6
+        if kind == "cavalry":
+            gap_x *= 1.5
+        rng = np.random.default_rng(e.get("seed", 3))
+        f_one, l_one = _soldier_paths(kind)
+        fills, lines = [], []
+        # back rows first, so front rows are drawn over them
+        for r in range(rows):
+            for c in range(cols):
+                jx, jy = rng.uniform(-2, 2) * scale, rng.uniform(-1.5, 1.5) * scale
+                ox = (c - (cols - 1) / 2) * gap_x + (r % 2) * gap_x / 2 + jx
+                oy = (r - (rows - 1)) * gap_y + jy
+                tr = Affine2D().scale(scale).translate(ox, oy)
+                fills += [p.transformed(tr) for p in f_one]
+                lines += [tr.transform(np.array(ln, float)) for ln in l_one]
+        # banner at the front corner: a pole and a flag in the side's colour
+        bx = (cols - 1) / 2 * gap_x + gap_x * 0.9
+        pole = [(bx, 0), (bx, -62 * scale)]
+        flag = MPath([(bx, -62 * scale), (bx + 22 * scale, -57 * scale), (bx, -50 * scale), (bx, -62 * scale)],
+                     [MPath.MOVETO, MPath.LINETO, MPath.LINETO, MPath.CLOSEPOLY])
+        fills.append(flag)
+        lines.append(np.array(pole))
+        self.body = PathPatch(MPath.make_compound_path(*fills), fc=color, ec=P["ink"], lw=1.1 * PT, zorder=7.05)
+        self.gear = LineCollection(lines, colors=P["ink"], linewidths=1.6 * PT, zorder=7.06)
+        ov.add_patch(self.body)
+        ov.add_collection(self.gear)
+        self.texts = []
+        if e.get("label"):  # e.g. "Army A - c. 0,000 (est.)": the sourced number goes here
+            lab = PathText(ov, e["label"], fonts["caps"], 22, P["ink"], ha="center", tracking=2, zorder=7.2)
+            self.texts.append((lab, 0, 30 * scale))
+
+    def place(self, px, py, facing_left=False):
+        flip = Affine2D().scale(-1 if facing_left else 1, 1)
+        tr = flip + Affine2D().translate(px, py) + self.ov.transData
+        self.body.set_transform(tr)
+        self.gear.set_transform(tr)
+        for t, dx, dy in self.texts:
+            t.move(px + dx, py + dy)
+
+    def set_alpha(self, a):
+        for art in (self.body, self.gear):
+            art.set_alpha(a)
+            art.set_visible(a > 0.002)
+        for t, _, _ in self.texts:
+            t.set_alpha(a)
+
+
+class Portrait:
+    """A general's (or ruler's) portrait in an engraved oval medallion, with name and dates
+    under it and a small credit line. It can sit beside a place on the map (with a thin leader
+    line to that place) or follow a route, like the army it leads.
+    The picture must be public domain / CC0 and logged; the credit is shown under the name."""
+
+    def __init__(self, ov, fonts, P, e, base_dir):
+        self.ov, self.e = ov, e
+        tone = (P["ground-sunk"], P["ink"]) if e.get("tone", True) else None
+        img = load_picture(base_dir / e["file"], max_side=900, tone=tone)
+        h_img, w_img = img.shape[:2]
+        R = e.get("size_px", 120) / 2                # medallion radius (height = size)
+        rx, ry = R * 0.82, R                         # an upright oval
+        self.parts = []                              # artists drawn around (0, 0)
+        from matplotlib.patches import Ellipse
+        self.clip = Ellipse((0, 0), 2 * rx, 2 * ry)
+        # the picture: fill the oval ("cover"), centred on the face position given (0..1)
+        cx, cy = e.get("face", [0.5, 0.35])
+        s = max(2 * rx / w_img, 2 * ry / h_img) * e.get("zoom", 1.0)
+        W, H = w_img * s, h_img * s
+        left, top = -cx * W, -cy * H
+        left, top = min(max(left, rx - W), -rx), min(max(top, ry - H), -ry)
+        self.im = ov.imshow(img, extent=(left, left + W, top + H, top), origin="upper", zorder=7.31,
+                            interpolation="bilinear", aspect="auto")
+        for art in (Ellipse((0, 0), 2 * rx + 16, 2 * ry + 16, fc=P["ground-raised"], ec=P["ink"], lw=3 * PT, zorder=7.3),
+                    Ellipse((0, 0), 2 * rx + 6, 2 * ry + 6, fc="none", ec=P["ink"], lw=1.2 * PT, zorder=7.32),
+                    Ellipse((0, 0), 2 * rx, 2 * ry, fc="none", ec=P["ink"], lw=1.6 * PT, zorder=7.33)):
+            ov.add_patch(art)
+            self.parts.append(art)
+        self.texts = []
+        y = ry + 34
+        name = PathText(ov, e.get("name", ""), fonts["caps"], 26, P["ink"], ha="center", tracking=4, zorder=7.35)
+        self.texts.append((name, 0, y))
+        if e.get("dates"):
+            self.texts.append((PathText(ov, e["dates"], fonts["body_italic"], 20, P["ink-muted"], ha="center",
+                                        zorder=7.35), 0, y + 24))
+        if e.get("credit"):
+            self.texts.append((PathText(ov, e["credit"], fonts["body_italic"], 15, P["ink-muted"], ha="center",
+                                        zorder=7.35), 0, y + 46))
+        # plate behind the name so it reads over any map
+        self.plate = Rectangle((-max(rx + 40, 130), ry + 8), 2 * max(rx + 40, 130), 64 if e.get("credit") else 50,
+                               fc=P["ground-raised"], ec=P["ink"], lw=1.2 * PT, zorder=7.29)
+        ov.add_patch(self.plate)
+        self.parts.append(self.plate)
+        (self.leader,) = ov.plot([], [], color=P["ink"], lw=1.4 * PT, zorder=7.28)
+        self.offset = e.get("offset", [-170, -150])  # where the medallion sits, relative to its place (pixels)
+
+    def place(self, ax_px, ax_py):
+        """ax_px, ax_py = the place on screen it belongs to (the army, the city)."""
+        dx, dy = self.offset
+        mx, my = ax_px + dx, ax_py + dy
+        tr = Affine2D().translate(mx, my) + self.ov.transData
+        for p in self.parts:
+            p.set_transform(tr)
+        self.im.set_transform(tr)
+        self.clip.set_transform(tr)
+        self.im.set_clip_path(self.clip)
+        for t, x, y in self.texts:
+            t.move(mx + x, my + y)
+        self.leader.set_data([ax_px, mx], [ax_py, my])
+
+    def set_alpha(self, a):
+        for p in self.parts + [self.im, self.leader]:
+            p.set_alpha(a)
+            p.set_visible(a > 0.002)
+        for t, _, _ in self.texts:
+            t.set_alpha(a)

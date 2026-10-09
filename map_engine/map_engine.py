@@ -56,7 +56,8 @@ from shapely.ops import linemerge, unary_union
 from shapely import affinity
 
 # The "History Through Maps" brand pieces (hatching, small-capital text, plates, sting).
-from brand_parts import (PT, Hatcher, ImagePlate, Marker, PathText, Route, Sting, load_style, make_chapter_card,
+from brand_parts import (PT, Hatcher, ImagePlate, Marker, PathText, Portrait, Route, Sting, Troops, load_style,
+                         make_chapter_card,
                          make_end_screen, make_lower_third, make_title_card)
 
 HERE = Path(__file__).resolve().parent
@@ -832,6 +833,11 @@ class Renderer:
             elif ty == "map_overlay":  # a scanned old map pinned to 3 known points
                 tone = (self.palette["ground-sunk"], self.palette["ink"]) if e.get("tone") else None
                 self.art[i] = (MapOverlay(self.ax, e, HERE, tone),)
+            elif ty == "troops":  # a formation of soldier figures in one side's colour
+                col = self._colour(e.get("color", "@territory"))
+                self.art[i] = (Troops(self.ov, self.font_files, self.palette, e, col),)
+            elif ty == "portrait":  # a general's portrait in an oval medallion, beside their army or city
+                self.art[i] = (Portrait(self.ov, self.font_files, self.palette, e, HERE),)
             elif ty == "marker":  # battle cross, site ring, capital, or army counter
                 self.art[i] = (Marker(self.ov, self.font_files, self.palette, e, s["markers"]),)
             elif ty == "cite":  # a short source line shown while a fact is on screen
@@ -863,6 +869,15 @@ class Renderer:
     def _colour(self, c):
         """An episode may name a brand colour ("@madder") or give a plain one ("#aa3322")."""
         return self.palette.get(c[1:], c) if isinstance(c, str) and c.startswith("@") else c
+
+    def _anchor(self, e, t):
+        """Where a marker / troops / portrait is on the map at time t, and which way it is heading.
+        Either fixed ("lon", "lat") or riding along a route ("follow": route id)."""
+        if e.get("follow"):
+            route, re = self.routes[e["follow"]]
+            xy, direction, _ = route.point_at(max(self._route_progress(re, t), 1e-6))
+            return xy, direction
+        return proj_xy(e["lon"], e["lat"]), None
 
     def _route_progress(self, e, t):
         """How much of a route is drawn at time t (0..1), easing in and out."""
@@ -1117,14 +1132,14 @@ class Renderer:
             elif ty == "route":
                 al = fade(t, e["t"], 0.3, e.get("out"), e.get("out_dur", 1.0))
                 a[0].update(self._route_progress(e, t), al, px_per_unit)
-            elif ty == "marker":
-                if e.get("follow"):  # ride along a route: sit at the arrow's tip
-                    route, re = self.routes[e["follow"]]
-                    xy, _, _ = route.point_at(max(self._route_progress(re, t), 1e-6))
-                else:
-                    xy = proj_xy(e["lon"], e["lat"])
+            elif ty in ("marker", "troops", "portrait"):
+                xy, heading = self._anchor(e, t)
                 px, py = to_overlay.transform(xy)
-                a[0].place(px, py)
+                if ty == "troops":  # face the way the route goes (or "facing": "left")
+                    left = heading[0] < 0 if heading is not None else e.get("facing") == "left"
+                    a[0].place(px, py, facing_left=left)
+                else:
+                    a[0].place(px, py)
                 a[0].set_alpha(fade(t, e["t"], e.get("dur", 0.6), e.get("out"), e.get("out_dur", 0.8)))
 
         self.fig.canvas.draw()
