@@ -56,7 +56,7 @@ from shapely.ops import linemerge, unary_union
 from shapely import affinity
 
 # The "History Through Maps" brand pieces (hatching, small-capital text, plates, sting).
-from brand_parts import (PT, Hatcher, Marker, PathText, Route, Sting, load_style, make_chapter_card,
+from brand_parts import (PT, Hatcher, ImagePlate, Marker, PathText, Route, Sting, load_style, make_chapter_card,
                          make_end_screen, make_lower_third, make_title_card)
 
 HERE = Path(__file__).resolve().parent
@@ -352,6 +352,71 @@ class TerritoryTimeline:
 
 
 # --------------------------------------------------------------------------
+# 3c. OLD MAPS AND TERRAIN  (documentary features, phase C)
+# --------------------------------------------------------------------------
+class MapOverlay:
+    """A scanned old map laid over our map. It is pinned using 3 (or more) points that we can
+    find on both: [x pixel, y pixel, lon, lat], e.g. a fort, a temple and a river bend.
+    From those points we work out how to stretch / turn the scan to fit (an "affine" fit)."""
+
+    def __init__(self, ax, e, base_dir, tone=None):
+        from brand_parts import load_picture
+        self.e = e
+        img = load_picture(base_dir / e["file"], tone=tone)
+        h, w = img.shape[:2]
+        pts = np.array(e["points"], float)
+        src_scale = w / e.get("points_image_width", w)  # if points were measured on a bigger copy
+        src = np.column_stack([pts[:, 0] * src_scale, pts[:, 1] * src_scale, np.ones(len(pts))])
+        dst = np.array([proj_xy(lon, lat) for lon, lat in pts[:, 2:4]])
+        # least-squares fit of: map_xy = [px, py, 1] @ M   (exact with 3 points, best fit with more)
+        M, *_ = np.linalg.lstsq(src, dst, rcond=None)
+        self.fit_error = float(np.abs(src @ M - dst).max())  # how far the worst pin is off (map units)
+        from matplotlib.transforms import Affine2D as A2
+        tr = A2(np.array([[M[0, 0], M[1, 0], M[2, 0]], [M[0, 1], M[1, 1], M[2, 1]], [0, 0, 1]]))
+        self.im = ax.imshow(img, extent=(0, w, h, 0), origin="upper", interpolation="bilinear",
+                            zorder=7.5, alpha=0)
+        self.im.set_transform(tr + ax.transData)
+        if self.fit_error > 0.05:
+            print(f"  WARNING: old map {e['file']}: pins disagree by up to {self.fit_error:.2f} map units - check them")
+
+    def draw(self, t):
+        e = self.e
+        al = fade(t, e["t"], e.get("dur", 1.5), e.get("out"), e.get("out_dur", 1.5)) * e.get("alpha", 0.9)
+        self.im.set_alpha(al)
+        self.im.set_visible(al > 0.002)
+
+
+def make_terrain_layers(ax, cfg, palette, clip_box):
+    """Soft hill shading from Natural Earth's shaded-relief picture (public domain).
+    Slopes facing away from the light become shadows (dark brand colour); slopes facing it
+    get a faint highlight. Flat land stays untouched, so the engraved look is kept.
+    Returns the picture layers; the caller clips them to the land."""
+    from PIL import Image
+    from matplotlib.colors import to_rgb
+    Image.MAX_IMAGE_PIXELS = None  # the full-world picture is big; we only keep our area
+    im = Image.open(HERE / cfg["file"]).convert("L")
+    W, H = im.size
+    west, south, east, north = clip_box
+    # the picture covers the whole world: -180..180 longitude, 90..-90 latitude
+    crop = (int((west + 180) / 360 * W), int((90 - north) / 180 * H),
+            int((east + 180) / 360 * W), int((90 - south) / 180 * H))
+    v = np.asarray(im.crop(crop), dtype=np.float32) / 255.0
+    flat = float(np.percentile(v, 75))  # brightness of flat ground in this picture
+    shadow = np.clip((flat - v) / max(flat, 1e-6), 0, 1) ** 0.8
+    light = np.clip((v - flat) / max(1 - flat, 1e-6), 0, 1)
+    layers = []
+    for amount, colour, strength in ((shadow, palette.get(cfg.get("shadow", "ground-sunk"), "#000000"), cfg.get("strength", 0.55)),
+                                     (light, palette.get(cfg.get("light", "ink"), "#ffffff"), cfg.get("light_strength", 0.12))):
+        rgba = np.zeros(v.shape + (4,), dtype=np.float32)
+        rgba[..., :3] = to_rgb(colour)
+        rgba[..., 3] = amount * strength
+        layer = ax.imshow(rgba, extent=(west * XS, east * XS, south, north), origin="upper",
+                          interpolation="bilinear", zorder=2.05)
+        layers.append(layer)
+    return layers
+
+
+# --------------------------------------------------------------------------
 # 4.  THE RENDERER
 # --------------------------------------------------------------------------
 W0, H0 = 1920, 1080  # full-size video frame
@@ -465,6 +530,16 @@ class Renderer:
                 a1 += lines_of(proj_geom(a["geom"].simplify(0.004)))
         self.admin1_art = LineCollection(a1, colors=c["admin1"], linewidths=s["widths"]["admin1"], linestyles=(0, (4, 3)), zorder=4)
         self.ax.add_collection(self.admin1_art)
+
+        # terrain (brand, optional): soft hill shading, clipped to the land like the hatching
+        self.terrain = []
+        if s.get("terrain"):
+            if (HERE / s["terrain"]["file"]).exists():
+                self.terrain = make_terrain_layers(self.ax, s["terrain"], self.palette, World.CLIP)
+                for layer in self.terrain:
+                    layer.set_clip_path(self.lods[0]["land"])
+            else:
+                print("  (no terrain picture yet - run  python get_data.py --relief  to add hill shading)")
 
         # engraved hatching over all land (brand). It is clipped to whichever land shape is showing.
         self.land_hatch = None
@@ -608,6 +683,11 @@ class Renderer:
                 shapes = [self.regions[p["region"]] for p in e["periods"]]
                 self.art[i] = (TerritoryTimeline(self.ax, shapes, s["fills"][e.get("color", "territory")],
                                                  z=2.5 + i * 0.001, hatch_in=s.get("hatch_in", 0.8)),)
+            elif ty == "image":  # an artwork in an engraved plate, with a slow pan/zoom and a credit
+                self.art[i] = (ImagePlate(self.ov, self.font_files, self.palette, e, HERE),)
+            elif ty == "map_overlay":  # a scanned old map pinned to 3 known points
+                tone = (self.palette["ground-sunk"], self.palette["ink"]) if e.get("tone") else None
+                self.art[i] = (MapOverlay(self.ax, e, HERE, tone),)
             elif ty == "marker":  # battle cross, site ring, capital, or army counter
                 self.art[i] = (Marker(self.ov, self.font_files, self.palette, e, s["markers"]),)
             elif ty == "cite":  # a short source line shown while a fact is on screen
@@ -768,8 +848,11 @@ class Renderer:
             vis = lod["min_h"] <= h < lod["max_h"]
             for a in lod["artists"]:
                 a.set_visible(vis)
-            if vis and self.land_hatch and self._lod_shown is not lod:
-                self.land_hatch.set_clip(lod["land"])  # hatch only the land shape that is showing
+            if vis and self._lod_shown is not lod:
+                if self.land_hatch:
+                    self.land_hatch.set_clip(lod["land"])  # hatch only the land shape that is showing
+                for layer in self.terrain:
+                    layer.set_clip_path(lod["land"])
                 self._lod_shown = lod
         self.admin1_art.set_alpha(self.st.get("admin1_alpha", 0.6) * (1 - smooth((h - 6.0) / 6.0)))
 
@@ -856,6 +939,10 @@ class Renderer:
                 a[0].set_alpha(fade(t, e["t"], 0.6, e["t"] + e["dur"], 0.6))
             elif ty == "sting":
                 a[0].draw(t, fade, smooth)
+            elif ty == "image":
+                a[0].draw(t, fade, smooth)
+            elif ty == "map_overlay":
+                a[0].draw(t)
             elif ty == "territory":
                 A = fade(t, e["periods"][0]["t"], e.get("dur", 1.2), e.get("out"), e.get("out_dur", 1.5))
                 a[0].update(e, t, A, view, px_per_unit)

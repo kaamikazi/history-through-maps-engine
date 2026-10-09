@@ -662,3 +662,78 @@ class Marker:
             p.set_visible(a > 0.002)
         for t, _, _ in self.texts:
             t.set_alpha(a)
+
+
+# --------------------------------------------------------------------------
+# 6.  PICTURES  - documentary features, phase C
+# --------------------------------------------------------------------------
+def load_picture(path, max_side=2400, tone=None):
+    """Open an image file as an RGB array (0..1), shrunk so its longest side is at most
+    `max_side` pixels (faster to draw). tone = (dark, light) colours: turn the picture into
+    two brand colours (a "duotone", like an engraving printed in ink on paper)."""
+    from PIL import Image
+    from matplotlib.colors import to_rgb
+    im = Image.open(path).convert("RGB")
+    im.thumbnail((max_side, max_side))
+    arr = np.asarray(im, dtype=np.float32) / 255.0
+    if tone:
+        grey = arr @ np.array([0.299, 0.587, 0.114], dtype=np.float32)  # brightness of each pixel
+        dark, light = np.array(to_rgb(tone[0])), np.array(to_rgb(tone[1]))
+        arr = dark + (light - dark) * grey[..., None]
+    return np.clip(arr, 0, 1)
+
+
+class ImagePlate:
+    """An illustration (a public-domain or CC0 artwork) in a double-ruled plate over the dimmed
+    map, with a slow pan/zoom ("Ken Burns" move) and a credit line, as the brand asks for.
+
+    pan: {"from": [cx, cy, zoom], "to": [cx, cy, zoom]}
+         cx, cy = which point of the picture is in the middle (0..1 across / down)
+         zoom   = 1.0 shows the whole width or height (whichever fills the window), 1.3 is closer
+    """
+
+    def __init__(self, ov, fonts, P, e, base_dir):
+        self.ov, self.e = ov, e
+        tone = (P["ground-sunk"], P["ink"]) if e.get("tone", True) else None
+        self.img = load_picture(base_dir / e["file"], tone=tone)
+        self.ih, self.iw = self.img.shape[:2]
+        w, h = e.get("plate", [1120, 720])
+        pos = e.get("pos", "center")
+        x = {"left": 96, "center": (1920 - w) / 2, "right": 1920 - 96 - w}[pos]
+        y = (1080 - h) / 2 - 20
+        self.g = Group()
+        # layers 7.6-7.9: above map markers (7.0-7.2), below chapter cards (8+)
+        _rect(ov, self.g, 0, 0, 1920, 1080, fc=P["ground"], z=7.6, alpha=e.get("dim", 0.6))
+        _rect(ov, self.g, x, y, w, h, fc=P["ground-raised"], ec=P["ink"], lw_px=3, z=7.65)
+        _rect(ov, self.g, x + 10, y + 10, w - 20, h - 20, ec=P["ink"], lw_px=1.2, z=7.9)
+        # the picture window: inside the inner rule, leaving a strip at the bottom for the credit
+        self.box = (x + 24, y + 24, w - 48, h - 48 - 40)
+        bx, by, bw, bh = self.box
+        self.clip = Rectangle((bx, by), bw, bh, transform=ov.transData)
+        self.im = ov.imshow(self.img, extent=(bx, bx + bw, by + bh, by), origin="upper",
+                            interpolation="bilinear", zorder=7.7, aspect="auto")
+        self.im.set_clip_path(self.clip)
+        self.g.add(self.im)
+        _rect(ov, self.g, bx, by, bw, bh, ec=P["ink"], lw_px=1.2, z=7.75)
+        if e.get("credit"):
+            _text(ov, self.g, fonts, "body_italic", e["credit"], 22, P["ink-muted"], x + w / 2, y + h - 30,
+                  ha="center", z=7.9)
+
+    def draw(self, t, fade_fn, smooth_fn):
+        e = self.e
+        al = fade_fn(t, e["t"], 0.6, e["t"] + e["dur"], 0.6)
+        self.g.set_alpha(al)
+        if al <= 0.002:
+            return
+        pan = e.get("pan", {"from": [0.5, 0.5, 1.0], "to": [0.5, 0.5, 1.12]})
+        u = smooth_fn((t - e["t"]) / max(e["dur"], 1e-6)) if e.get("ease", True) else \
+            min(max((t - e["t"]) / e["dur"], 0), 1)
+        cx, cy, zoom = [a + (b - a) * u for a, b in zip(pan["from"], pan["to"])]
+        bx, by, bw, bh = self.box
+        # scale so the picture COVERS the window at zoom 1, then zoom in from there
+        s = max(bw / self.iw, bh / self.ih) * zoom
+        w, h = self.iw * s, self.ih * s
+        # keep the window inside the picture (no empty edges)
+        left = min(max(bx + bw / 2 - cx * w, bx + bw - w), bx)
+        top = min(max(by + bh / 2 - cy * h, by + bh - h), by)
+        self.im.set_extent((left, left + w, top + h, top))

@@ -7,6 +7,7 @@ All map shapes are Natural Earth (public domain). Fonts are SIL Open Font Licens
 1. Install Python 3.10+ and ffmpeg (ffmpeg must be on your PATH).
 2. `pip install -r requirements.txt`
 3. `python get_data.py`   (downloads about 50 MB of Natural Earth files into `data/`)
+4. `python get_data.py --relief`   (optional, 24 MB download: hill shading for the brand styles)
 
 ## The look: brand styles
 The channel identity is the repo https://github.com/kaamikazi/History-C (antique engraved atlas).
@@ -83,10 +84,15 @@ Copy `episodes/ep03_radcliffe_line.json`. The parts:
 | `sting` | 2.5 s logo sting (put it at about 0:20, after the cold open) | `dur` |
 | `cite` | short source line at the bottom while a fact is on screen | `text`, `dur` |
 | `territory` | one territory through several periods: gained land hatches in, lost land fades and leaves a dashed ghost border (no invented in-between borders) | `periods` [{t, region}], `color`, `change`, `ghost`, `out` |
+| `image` | an artwork in an engraved plate over the dimmed map, slow pan/zoom, credit line. `tone: false` keeps original colours | `file`, `credit`, `dur`, `pan` {from:[cx,cy,zoom], to:[...]}, `pos`, `plate` [w,h] |
+| `map_overlay` | a scanned old map pinned to 3+ known points and faded over the map | `file`, `points` [[x px, y px, lon, lat], ...], `alpha`, `tone`, `out` |
 | `route` | arrow engraved along a path (migration, campaign, trade). Dashed if `uncertain` | `points` [[lon,lat],...], `dur`, `id`, `uncertain`, `out` |
 | `marker` | map symbol: `battle`, `site`, `capital` or `army` (plate with `name` + `size`) | `kind`, `lon`/`lat` or `follow` (a route `id`), `label`, `out` |
 | `endscreen` | last 15-20 s: plates for YouTube's end-screen videos + subscribe | `next`, `dur` |
 | `title` | big title card | `title`, `subtitle`, `kicker`, `dim` |
+
+Pictures go in `assets/<episode>/`. Only public-domain / CC0 / openly licensed pictures, each logged in
+source_log.csv (the brand also asks for the artist, title, date and collection in the `credit`).
 
 Episode fields used by `make_description.py`: `source_video` (the name used in source_log.csv),
 `hook` (first line), `opening_title` (name of the 0:00 chapter), `chapters_extra` ([{t, title}]), `music`.

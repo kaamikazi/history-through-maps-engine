@@ -200,5 +200,12 @@
     "army": {
       "size_px": 22
     }
+  },
+  "terrain": {
+    "file": "data/SR_LR.tif",
+    "strength": 0.55,
+    "light_strength": 0.12,
+    "shadow": "ground-sunk",
+    "light": "ink"
   }
 }
